@@ -27,6 +27,7 @@ Sign in, then **your username → Trusted Publishing → add a policy**:
 
 | Field | Value |
 |---|---|
+| Policy Name | `sheetwright-release` — a label for your own list; nothing matches against it |
 | Repository Owner | `sinanoran` |
 | Repository | `sheetwright` |
 | Workflow File | `release.yml` — the file name only, not the path |
