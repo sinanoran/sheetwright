@@ -1,0 +1,31 @@
+# Line endings are decided here rather than by whoever cloned the repository.
+#
+# .editorconfig has said `end_of_line = crlf` since the beginning and nothing
+# enforced it: an editor obeys it, and a file written by a tool, a generator or a
+# container does not. The result was 539 files with LF and 24 with CRLF, none of
+# it deliberate and all of it invisible until a diff showed every line of a file
+# nobody had touched.
+#
+# `text=auto` lets git decide what is text and normalise it to LF *in the
+# repository*, which is what keeps a diff readable and a merge possible.
+# `eol=crlf` is what lands on disk, so the working tree matches .editorconfig and
+# Visual Studio on Windows. The two are not in conflict — they describe different
+# places, and the file you edit is the second one.
+* text=auto eol=crlf
+
+# Shell scripts are the exception and it is not cosmetic: a CRLF in a script with
+# a shebang makes the interpreter part of the argument, and the error is
+# "/bin/bash^M: bad interpreter".
+*.sh text eol=lf
+
+# Left alone entirely. Git detects most of these anyway; naming them means a
+# corrupted PNG can never be blamed on a newline conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.dll binary
+*.snk binary

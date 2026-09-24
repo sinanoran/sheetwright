@@ -1,0 +1,65 @@
+## build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## the build feedback loop writes this; it is machine-local
+build.log
+
+## rider / visual studio / vs code
+.vs/
+.idea/
+*.DotSettings.user
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+
+## test output
+[Tt]est[Rr]esult*/
+test-results/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.trx
+
+## SECRETS — nothing here, ever. See SECURITY.md.
+appsettings.*.local.json
+appsettings.Local.json
+*.pfx
+*.p12
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+secrets.json
+
+## node / frontend
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+## aspire
+.aspire/
+**/aspire-manifest.json
+
+## os
+.DS_Store
+Thumbs.db
+desktop.ini
+
+##
+_sync/
+_to_delete/

@@ -1,0 +1,82 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+[*.{json,yml,yaml,js,jsx,ts,tsx,css,html,xml,csproj,props,targets,slnx}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{ps1,psm1}]
+indent_size = 4
+
+[*.cs]
+# --- usings ---
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# --- modern C# we actually want ---
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_prefer_braces = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_throw_expression = true:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+dotnet_style_prefer_collection_expression = true:suggestion
+
+# --- correctness, promoted to errors ---
+# CA2016  forward CancellationToken to the callee
+# CA1849  do not call a blocking method inside an async one
+# CA2007  is deliberately NOT enabled: ConfigureAwait(false) is noise in ASP.NET Core
+dotnet_diagnostic.CA2016.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+# CS8600-8625: nullable reference warnings are errors. Nullability is a design
+# statement here, not a hint.
+dotnet_diagnostic.CS8600.severity = error
+dotnet_diagnostic.CS8602.severity = error
+dotnet_diagnostic.CS8603.severity = error
+dotnet_diagnostic.CS8604.severity = error
+dotnet_diagnostic.CS8618.severity = error
+
+# --- naming ---
+dotnet_naming_rule.private_fields_with_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_with_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_with_underscore.style = underscore_prefix
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.underscore_prefix.required_prefix = _
+dotnet_naming_style.underscore_prefix.capitalization = camel_case
+
+dotnet_naming_rule.constants_are_pascal_case.severity = suggestion
+dotnet_naming_rule.constants_are_pascal_case.symbols = constants
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# Test method names read as sentences: User_of_tenant_A_cannot_read_tenant_B().
+#
+# The glob is anchored at the repository root, so it covers exactly what it
+# names and nothing else. Every test project lives under tests/ today; a tree of
+# tests added anywhere else would need this pattern widened to reach it, and the
+# failure is silent — the half that stops being covered is the half nobody would
+# think to check.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
