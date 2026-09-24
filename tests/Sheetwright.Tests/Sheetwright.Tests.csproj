@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Sheetwright writes a file format, so these tests do what a reviewer cannot:
+    they open what was written. Almost every assertion here reads the produced
+    package back — through the library for behaviour, through
+    DocumentFormat.OpenXml for the parts of the XML that Excel refuses to open
+    and no public API exposes.
+
+    The suite runs anywhere the SDK does. No container, no host, no database.
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Sheetwright.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- xunit.v3 runs on Microsoft Testing Platform; this keeps `dotnet test` working. -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sheetwright\Sheetwright.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
+  </ItemGroup>
+
+</Project>

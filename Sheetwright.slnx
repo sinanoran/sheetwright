@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sheetwright/Sheetwright.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sheetwright.Tests/Sheetwright.Tests.csproj" />
+  </Folder>
+  <Folder Name="/solution items/">
+    <File Path="README.md" />
+    <File Path="CHANGELOG.md" />
+    <File Path="LICENSE" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+  </Folder>
+</Solution>

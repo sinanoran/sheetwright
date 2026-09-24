@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # The library writes a file format, so it is worth knowing it writes the same
+    # one everywhere. Windows and Linux differ on line endings, path separators
+    # and — before InvariantGlobalization was turned off — on date ordering.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore Sheetwright.slnx
+
+      - run: dotnet build Sheetwright.slnx --no-restore --configuration Release
+
+      - run: dotnet test Sheetwright.slnx --no-build --configuration Release
+
+      - name: Pack
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet pack src/Sheetwright/Sheetwright.csproj --no-build --configuration Release --output artifacts
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: nupkg
+          path: artifacts/*

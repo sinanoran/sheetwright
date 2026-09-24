@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Sheetwright</RootNamespace>
+    <AssemblyName>Sheetwright</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Sheetwright</PackageId>
+    <Description>A small, MIT-licensed .xlsx writer over DocumentFormat.OpenXml. Styles, number formats, data validation, tables, defined names, pictures, freeze panes and auto-fit — with an API shaped like the one you already know from EPPlus, and no commercial licence.</Description>
+    <PackageTags>xlsx;excel;spreadsheet;openxml;export;csv</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      CS1591 is off while the public surface is documented incrementally. The
+      types that carry a comment carry a real one; turning this into an error
+      today would buy fifty stubs saying "Gets or sets the value".
+    -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sheetwright.Tests" />
+  </ItemGroup>
+
+</Project>
