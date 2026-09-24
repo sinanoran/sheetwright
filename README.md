@@ -246,6 +246,11 @@ that opens the result — through the library for behaviour, through
 `DocumentFormat.OpenXml` for the parts of the XML that Excel refuses to open and
 no public API exposes.
 
+## Releasing
+
+Tag it. Publishing to nuget.org uses Trusted Publishing rather than a stored API
+key — see [RELEASING.md](RELEASING.md).
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).

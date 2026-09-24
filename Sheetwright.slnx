@@ -8,6 +8,7 @@
   <Folder Name="/solution items/">
     <File Path="README.md" />
     <File Path="CHANGELOG.md" />
+    <File Path="RELEASING.md" />
     <File Path="LICENSE" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
