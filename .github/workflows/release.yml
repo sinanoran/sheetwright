@@ -48,7 +48,17 @@ jobs:
       - name: Push to NuGet
         run: dotnet nuget push "artifacts/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
 
+      # A tag can be pushed again — history rewritten, a release re-cut — and the
+      # step before this one already handles that with --skip-duplicate. This one
+      # did not: `gh release create` fails outright on a tag that already has a
+      # release, so a re-push went red after publishing nothing and changing
+      # nothing. Create the release, or replace the assets on the one that is
+      # already there.
       - name: Create the GitHub release
-        run: gh release create "$GITHUB_REF_NAME" artifacts/* --title "$GITHUB_REF_NAME" --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)."
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)." \
+            || gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

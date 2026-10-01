@@ -66,7 +66,9 @@ it as one, and there is no cost to doing so.
 
 - **`--skip-duplicate` swallowed it.** The push step passes this flag, so
   re-tagging an already-published version succeeds without republishing. Check
-  nuget.org rather than the exit code.
+  nuget.org rather than the exit code. The release step is the same shape: it
+  replaces the assets on a release that already exists rather than failing, so a
+  tag moved onto a new commit re-runs cleanly.
 - **The key expired.** It is valid for one hour and is requested in the step
   immediately before the push, so this means something in front of it took
   longer than an hour. Re-run the job.
