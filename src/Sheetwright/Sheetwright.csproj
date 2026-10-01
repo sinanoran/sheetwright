@@ -8,8 +8,22 @@
 
   <PropertyGroup Label="Package">
     <PackageId>Sheetwright</PackageId>
-    <Description>A small, MIT-licensed .xlsx writer over DocumentFormat.OpenXml. Styles, number formats, data validation, tables, defined names, pictures, freeze panes and auto-fit — with an API shaped like the one you already know from EPPlus, and no commercial licence.</Description>
-    <PackageTags>xlsx;excel;spreadsheet;openxml;export;csv</PackageTags>
+    <Description>A small, MIT-licensed .xlsx writer over DocumentFormat.OpenXml. Styles, number formats, data validation, tables, defined names, pictures, freeze panes and auto-fit — plus a streaming writer for exports too large to hold in memory — with an API shaped like the one you already know from EPPlus, and no commercial licence.</Description>
+    <PackageTags>xlsx;excel;spreadsheet;openxml;export;csv;streaming</PackageTags>
+    <!--
+      Shown on nuget.org beside the version. Kept to what changed, in the same
+      words as CHANGELOG.md, because a release note that restates the package
+      description tells a reader nothing about whether to upgrade.
+    -->
+    <PackageReleaseNotes>
+Added: SpreadsheetStreamWriter, a single worksheet written straight to a stream one row at a time, for an export too large to hold in memory. SpreadsheetPackage keeps every cell until it is asked for the bytes, which is what lets styles merge and columns auto-fit, and what runs a worker out of memory on a report of several hundred thousand rows. The streaming writer keeps nothing but the row in hand, and the bytes reach the destination as the rows arrive. A table on a streamed sheet may be left open at the bottom — pass null for its last row and it ends at the last row written.
+
+Fixed: NaN and the infinities are written as text rather than as numbers. The file format has no numeric spelling for any of the three, so a numeric cell holding NaN produced a workbook Excel offered to repair rather than open.
+
+Changed: a streamed table and a table on an in-memory sheet resolve their column names through the same code, so an empty heading becomes its column letter and a repeated one gains a suffix identically in both.
+
+Full notes: https://github.com/sinanoran/sheetwright/blob/main/CHANGELOG.md
+    </PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!--
