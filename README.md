@@ -307,7 +307,7 @@ SDK at all, which is what lets it forget a row as soon as it has written it. Its
 tests run everything it produces through `OpenXmlValidator` as well as reading
 it, because nothing checks the schema on the way out.
 
-That is why `tests/Sheetwright.Tests` opens almost everything it writes. 268
+That is why `tests/Sheetwright.Tests` opens almost everything it writes. 270
 tests, no container, no database; they run anywhere the SDK does.
 
 ```bash

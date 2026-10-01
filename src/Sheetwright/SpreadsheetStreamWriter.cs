@@ -568,12 +568,14 @@ public sealed class SpreadsheetStreamWriter : IDisposable
 
     /// <summary>
     /// The style a <see cref="DateTime"/> cell is written with: the caller's own, or the caller's
-    /// own plus <c>dd/mm/yyyy</c> when neither it nor the column already formats the cell.
+    /// own plus <c>dd/mm/yyyy</c> when nothing already formats the cell.
     /// </summary>
     /// <remarks>
     /// A date cell with no number format shows Excel's serial number and the export looks broken,
     /// so <see cref="SpreadsheetWorksheet"/> gives one a format and so does this. A format the
-    /// caller set, on the cell or on the column, always wins.
+    /// caller set wins. The column's format counts only for a cell that has no style of its own,
+    /// because that is the only case where Excel falls back to it: a cell with its own style is
+    /// formatted by that style alone, so leaving it General would show the serial number.
     /// </remarks>
     private uint GetDateStyleIndex(int column, uint styleIndex)
     {
@@ -626,11 +628,11 @@ public sealed class SpreadsheetStreamWriter : IDisposable
             TablePart table = _tables[index - 1];
 
             // A range left open at the bottom ends at the last row written, which is only known
-            // now. The header row is the floor: it has been written, or Complete refused.
+            // now.
             string reference = new SpreadsheetAddress(
                 table.FromRow,
                 table.FromColumn,
-                table.ToRow ?? Math.Max(table.FromRow, _currentRow),
+                table.ToRow ?? GetOpenEndRow(table),
                 table.ToColumn).Reference;
 
             WritePart($"xl/tables/{TablePartName(index)}", writer =>
@@ -669,6 +671,30 @@ public sealed class SpreadsheetStreamWriter : IDisposable
                 writer.WriteEndElement();
             });
         }
+    }
+
+    /// <summary>
+    /// The last row of a table whose range was left open at the bottom: the last row written, or
+    /// the row above the next table down when there is one.
+    /// </summary>
+    /// <remarks>
+    /// Two tables cannot overlap — Excel refuses the file rather than picking one — so a table
+    /// left open above another one stops where that one starts. Without this, a sheet of stacked
+    /// tables would give the first of them every row on the sheet. The header row is the floor: it
+    /// has been written, or <see cref="Complete"/> refused.
+    /// </remarks>
+    private int GetOpenEndRow(TablePart table)
+    {
+        int lastRow = _currentRow;
+        foreach (TablePart other in _tables)
+        {
+            if (other.FromRow > table.FromRow && other.FromRow - 1 < lastRow)
+            {
+                lastRow = other.FromRow - 1;
+            }
+        }
+
+        return Math.Max(table.FromRow, lastRow);
     }
 
     /// <remarks>
