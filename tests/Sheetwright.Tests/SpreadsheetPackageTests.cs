@@ -112,6 +112,27 @@ public sealed class SpreadsheetPackageTests
     }
 
     [Fact]
+    public void NaN_and_the_infinities_are_written_as_text_rather_than_as_numbers()
+    {
+        // `<v>NaN</v>` in a numeric cell is a file Excel offers to repair rather than open: the
+        // format has one numeric type and no spelling for these three. An average over an empty
+        // set is the usual way a caller arrives here, and it should produce a cell that reads
+        // oddly rather than a workbook that does not open at all.
+        using WrittenWorkbook written = WrittenWorkbook.From(package =>
+        {
+            SpreadsheetWorksheet sheet = package.Workbook.Worksheets.Add("Data");
+            sheet.Cells[1, 1].Value = double.NaN;
+            sheet.Cells[1, 2].Value = double.PositiveInfinity;
+            sheet.Cells[1, 3].Value = float.NegativeInfinity;
+        });
+
+        Assert.Equal("NaN", written.Text("Data", "A1"));
+        Assert.Equal("Infinity", written.Text("Data", "B1"));
+        Assert.Equal("-Infinity", written.Text("Data", "C1"));
+        Assert.Equal(CellValues.SharedString, written.Cell("Data", "A1")!.DataType!.Value);
+    }
+
+    [Fact]
     public void A_repeated_string_is_stored_once()
     {
         // The shared string table is the reason a 200,000-row export is not
