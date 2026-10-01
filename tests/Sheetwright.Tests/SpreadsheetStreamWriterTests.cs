@@ -305,6 +305,54 @@ public sealed class SpreadsheetStreamWriterTests
     }
 
     [Fact]
+    public void A_table_left_open_above_another_one_stops_where_that_one_starts()
+    {
+        // Two tables cannot overlap: Excel refuses the file rather than picking one. Without a
+        // stop, the first of a stack of tables would take every row on the sheet.
+        using WrittenWorkbook written = StreamedWorkbook(writer =>
+        {
+            writer.AddTable(1, 1, null, 1, "First", ["Reference"]);
+            writer.AddTable(5, 1, null, 1, "Second", ["Total"]);
+
+            writer.StartRow(1);
+            writer.WriteCell(1, "Reference");
+            writer.StartRow(2);
+            writer.WriteCell(1, "INV-1");
+            writer.StartRow(5);
+            writer.WriteCell(1, "Total");
+            writer.StartRow(6);
+            writer.WriteCell(1, 1D);
+        });
+
+        WorksheetPart part = (WorksheetPart)written.WorkbookPart
+            .GetPartById(written.Workbook.Sheets!.Elements<Sheet>().Single().Id!.Value!);
+
+        Assert.Equal<string[]>(
+            ["A1:A4", "A5:A6"],
+            [.. part.TableDefinitionParts.Select(x => x.Table!.Reference!.Value!).Order()]);
+    }
+
+    [Fact]
+    public void A_quarter_of_a_million_rows_does_not_grow_the_heap()
+    {
+        // This is the fault the class exists for. SpreadsheetPackage holds every cell until it is
+        // asked for the bytes, so an export like this one is what ran a worker out of memory; here
+        // nothing is kept but the row in hand. Fifty times the rows must not cost fifty times the
+        // memory, so the measurement is taken at the last row rather than after Complete — that is
+        // where a writer that was quietly accumulating would already be holding everything.
+        (long small, long smallBytes) = WriteAndMeasure(5_000);
+        (long large, long largeBytes) = WriteAndMeasure(250_000);
+
+        Assert.True(largeBytes > 1_000_000L, $"The large workbook was only {largeBytes} bytes.");
+        Assert.True(smallBytes > 0L, "The small workbook was empty.");
+
+        const long headroom = 4L * 1024L * 1024L;
+        Assert.True(
+            large - small < headroom,
+            $"Fifty times the rows held {large - small} more bytes of heap: {small} at 5,000 rows and {large} at 250,000.");
+    }
+
+    [Fact]
     public void Identical_formatting_resolves_to_one_entry_in_the_style_table()
     {
         using WrittenWorkbook written = StreamedWorkbook(writer =>
@@ -578,6 +626,78 @@ public sealed class SpreadsheetStreamWriterTests
         Assert.Throws<ArgumentNullException>(() => new SpreadsheetStreamWriter(new MemoryStream(), null!));
         Assert.Throws<ArgumentException>(
             () => new SpreadsheetStreamWriter(new MemoryStream([1, 2, 3], writable: false), "Data"));
+    }
+
+    /// <summary>
+    /// Writes a workbook of <paramref name="rowCount"/> rows and returns the live managed heap at
+    /// the last row, with the number of bytes the workbook came to.
+    /// </summary>
+    /// <remarks>
+    /// The destination counts bytes and throws them away, because a workbook this size held in a
+    /// <see cref="MemoryStream"/> would be most of what the measurement saw.
+    /// </remarks>
+    private static (long LiveBytes, long WorkbookBytes) WriteAndMeasure(int rowCount)
+    {
+        using CountingStream destination = new();
+        long liveBytes;
+
+        using (SpreadsheetStreamWriter writer = new(destination, "Data"))
+        {
+            uint bold = writer.GetStyleIndex(bold: true);
+            writer.AddTable(1, 1, null, 2, "Rows", ["Id", "Name"]);
+
+            writer.StartRow(1);
+            writer.WriteCell(1, "Id", bold);
+            writer.WriteCell(2, "Name", bold);
+
+            for (int row = 2; row <= rowCount + 1; row++)
+            {
+                writer.StartRow(row);
+                writer.WriteCell(1, row - 1);
+                writer.WriteCell(2, $"Row {row - 1}");
+            }
+
+            liveBytes = GC.GetTotalMemory(forceFullCollection: true);
+            writer.Complete();
+        }
+
+        return (liveBytes, destination.Length);
+    }
+
+    /// <summary>A destination that keeps the length and nothing else.</summary>
+    private sealed class CountingStream : Stream
+    {
+        private long _length;
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => _length;
+
+        public override long Position
+        {
+            get => _length;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count) => _length += count;
+
+        public override void Write(ReadOnlySpan<byte> buffer) => _length += buffer.Length;
+
+        public override void WriteByte(byte value) => _length++;
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 
     /// <summary>Writes a workbook and returns its bytes, having checked them against the schema.</summary>
