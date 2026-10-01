@@ -71,10 +71,22 @@ internal sealed class WrittenWorkbook : IDisposable
             .SelectMany(row => row.Elements<Cell>())
             .FirstOrDefault(cell => string.Equals(cell.CellReference?.Value, reference, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The displayed text of a cell, with a shared string resolved.</summary>
+    /// <summary>
+    /// The displayed text of a cell, with a shared string resolved.
+    /// </summary>
+    /// <remarks>
+    /// An inline string has no <c>v</c> at all — the text is a child element —
+    /// which is how <see cref="SpreadsheetStreamWriter"/> writes every string it
+    /// writes.
+    /// </remarks>
     internal string? Text(string sheetName, string reference)
     {
         Cell? cell = Cell(sheetName, reference);
+        if (cell?.InlineString is InlineString inline)
+        {
+            return inline.Text?.Text;
+        }
+
         string? raw = cell?.CellValue?.InnerText;
         if (raw is null)
         {

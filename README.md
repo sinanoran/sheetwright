@@ -94,8 +94,71 @@ app.MapGet("/invoices/export", async (InvoiceQueries queries, CancellationToken 
 ```
 
 The whole workbook is held in memory, so an export of unbounded size is an
-unbounded allocation. Page the query, cap the row count, or move the work to a
-background job and hand back a stored file.
+unbounded allocation. Cap the row count, or stream it — which is the next
+section.
+
+## Streaming a large export
+
+`SpreadsheetPackage` holds every cell until it is asked for the bytes. That is
+what makes the rest of this library possible — styles merge, columns auto-fit, a
+table reads its headings out of its own header row — and it is why a report of
+several hundred thousand rows runs a worker out of memory.
+
+`SpreadsheetStreamWriter` is the other trade. It writes one worksheet straight to
+a stream, a row at a time, and keeps nothing but the row in hand:
+
+```csharp
+using Sheetwright;
+
+using FileStream file = File.Create(path);
+using SpreadsheetStreamWriter writer = new(file, "Invoices", author: "Reports");
+
+uint header = writer.GetStyleIndex(bold: true);
+uint money = writer.GetStyleIndex(numberFormat: "#,##0.00");
+
+writer.SetColumn(1, width: 18D);
+writer.SetColumn(3, width: 14D, styleIndex: money);
+
+// null is "to the last row written" — the row count is the one thing a streaming
+// caller rarely has, and the table part is written at the end anyway.
+writer.AddTable(1, 1, null, 3, "Invoices", ["Reference", "Issued", "Amount"]);
+
+writer.StartRow(1);
+writer.WriteCell(1, "Reference", header);
+writer.WriteCell(2, "Issued", header);
+writer.WriteCell(3, "Amount", header);
+
+int row = 2;
+await foreach (Invoice invoice in queries.StreamAsync(cancellationToken))
+{
+    writer.StartRow(row++);
+    writer.WriteCell(1, invoice.Reference);
+    writer.WriteCell(2, invoice.IssuedOn);
+    writer.WriteCell(3, invoice.Amount);
+}
+
+writer.Complete();
+```
+
+What it costs, so that the choice is a choice:
+
+- **Rows go in once, in order** — ascending rows, ascending columns within a row,
+  and nothing can be revisited. Columns and tables are declared before the first
+  row, because their XML is written ahead of the rows.
+- **One worksheet**, and no pictures, data validation, merged cells, freeze panes
+  or auto-fit. The styling is what `GetStyleIndex` takes: bold, italic, a number
+  format, wrapping.
+- **Text is written inline**, so there is no shared string table to hold open —
+  and a workbook of repeated values comes out larger than the same workbook from
+  `SpreadsheetPackage`.
+- **`Complete()` finishes the workbook.** Disposing without it leaves a readable
+  ZIP that is not a workbook. The destination stream is left open either way, so
+  the caller still owns it.
+
+Values are typed exactly as `SpreadsheetPackage` types them, down to the
+`dd/mm/yyyy` a `DateTime` gets when the caller gave no format of its own, and a
+table names its columns the same way — so the same rows produce the same cells
+whichever writer wrote them.
 
 ## Exporting a grid
 
@@ -144,12 +207,19 @@ touched, so a negative number keeps its minus sign.
 | `bool` | boolean | `bool` |
 | `DateTime` | serial number, formatted `dd/mm/yyyy` | `DateTime` |
 | `null`, `DBNull.Value` | empty cell | `null` |
+| `NaN`, `±Infinity` | shared string of the value | `string` |
 | anything else | shared string of `Convert.ToString` | `string` |
 
 Numbers all come back as `double`: the file format has one numeric type and the
 reader does not know what the writer started with. A `decimal` written and read
 is a `decimal` no longer, which matters if you round-trip money through a
 workbook — don't.
+
+`NaN` and the infinities are the exception, and they go in as text. The format
+has no numeric spelling for them, so `<v>NaN</v>` is a cell Excel offers to
+repair rather than open — and the usual way a caller gets there is an average
+over an empty set, which deserves a cell that reads oddly rather than a workbook
+that does not open.
 
 A `DateTime` written with no explicit number format gets `dd/mm/yyyy`, because a
 date cell with no format shows Excel's serial number and the export looks broken.
@@ -232,7 +302,12 @@ itself. That is not incidental complexity — it is what keeps the whole workboo
 in memory with no temporary file — but it does mean the file format is this
 repository's responsibility rather than the SDK's.
 
-That is why `tests/Sheetwright.Tests` opens almost everything it writes. 241
+`SpreadsheetStreamWriter` goes further and writes its XML as text, without the
+SDK at all, which is what lets it forget a row as soon as it has written it. Its
+tests run everything it produces through `OpenXmlValidator` as well as reading
+it, because nothing checks the schema on the way out.
+
+That is why `tests/Sheetwright.Tests` opens almost everything it writes. 268
 tests, no container, no database; they run anywhere the SDK does.
 
 ```bash

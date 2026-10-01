@@ -10,7 +10,8 @@ namespace Sheetwright;
 public sealed class SpreadsheetWorksheet
 {
     // Applied to a cell written as a DateTime that the caller never gave an explicit format.
-    private const string ImplicitDateNumberFormat = "dd/mm/yyyy";
+    // SpreadsheetStreamWriter applies the same one, so it lives here rather than in both.
+    internal const string ImplicitDateNumberFormat = "dd/mm/yyyy";
 
     private readonly SpreadsheetPackage _package;
     private readonly WorksheetPart _worksheetPart;
@@ -226,6 +227,23 @@ public sealed class SpreadsheetWorksheet
             case bool boolean:
                 cell.CellValue = new CellValue(boolean ? "1" : "0");
                 cell.DataType = CellValues.Boolean;
+                break;
+
+            // NaN and the infinities have no numeric representation in the file format. Written
+            // as a number they produce `<v>NaN</v>`, which is a cell Excel offers to repair
+            // rather than open, so they go in as the text they print as everywhere else.
+            case double number when double.IsNaN(number) || double.IsInfinity(number):
+                cell.CellValue = new CellValue(_package
+                    .GetSharedStringIndex(number.ToString(CultureInfo.InvariantCulture))
+                    .ToString(CultureInfo.InvariantCulture));
+                cell.DataType = CellValues.SharedString;
+                break;
+
+            case float number when float.IsNaN(number) || float.IsInfinity(number):
+                cell.CellValue = new CellValue(_package
+                    .GetSharedStringIndex(number.ToString(CultureInfo.InvariantCulture))
+                    .ToString(CultureInfo.InvariantCulture));
+                cell.DataType = CellValues.SharedString;
                 break;
 
             case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
@@ -811,6 +829,8 @@ public sealed class SpreadsheetWorksheet
         OpenXmlWorksheet.InsertAfter(protection, EnsureSheetData());
     }
 
+    // SpreadsheetStreamWriter.WriteTables writes the same table XML for a streamed export; keep
+    // the two in step.
     private void CommitTables()
     {
         foreach (SpreadsheetTableDefinition definition in _tables)
@@ -833,9 +853,7 @@ public sealed class SpreadsheetWorksheet
             {
                 string existing = Convert.ToString(GetValue(address.FromRow, column), CultureInfo.InvariantCulture)
                     ?? string.Empty;
-                string heading = GetUniqueTableHeading(
-                    string.IsNullOrWhiteSpace(existing) ? SpreadsheetAddress.GetColumnName(column) : existing,
-                    headings);
+                string heading = SpreadsheetTableHeadings.Resolve(existing, column, headings);
 
                 // Excel checks a table's column names against the cells of its
                 // header row and offers to repair the file when they disagree, so
@@ -907,25 +925,6 @@ public sealed class SpreadsheetWorksheet
             hash ^= 0xCE4B;
         }
         return hash.ToString("X4", CultureInfo.InvariantCulture);
-    }
-
-    private static string GetUniqueTableHeading(string heading, HashSet<string> headings)
-    {
-        if (headings.Add(heading))
-        {
-            return heading;
-        }
-
-        int suffix = 2;
-        string candidate;
-        do
-        {
-            candidate = $"{heading}{suffix.ToString(CultureInfo.InvariantCulture)}";
-            suffix++;
-        }
-        while (!headings.Add(candidate));
-
-        return candidate;
     }
 
     private static int GetPictureRow(Xdr.Picture picture)
