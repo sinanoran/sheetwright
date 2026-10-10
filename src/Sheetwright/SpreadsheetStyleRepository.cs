@@ -14,6 +14,7 @@ internal sealed class SpreadsheetStyleRepository
     private readonly Dictionary<string, uint> _fillIndexes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, uint> _borderIndexes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, uint> _numberFormats = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, uint> _differentialFormatIndexes = new(StringComparer.Ordinal);
 
     internal SpreadsheetStyleRepository(WorkbookPart workbookPart)
     {
@@ -80,9 +81,136 @@ internal sealed class SpreadsheetStyleRepository
         return index;
     }
 
+    /// <summary>
+    /// The index in <c>dxfs</c> of a conditional format's formatting, added if it is new.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// De-duplicated by its XML, like fonts, fills and borders: a rule repeated down fifty sheets
+    /// is one entry, not fifty. The XML is built in a fixed order whatever order the caller set
+    /// things in, so the same formatting always produces the same key.
+    /// </para>
+    /// <para>
+    /// Two details here are Excel's rather than the schema's, and both are invisible until a
+    /// workbook is opened. A dxf fill puts its colour in <c>bgColor</c> with no pattern type,
+    /// which is how Excel writes one; a solid <c>fgColor</c>, which is right for a cell format, is
+    /// not what Excel reads here. And a dxf number format is registered in <c>numFmts</c> too, so
+    /// its id is allocated from the same sequence as every cell format's and can never name a
+    /// different format from a cell that happens to share the number.
+    /// </para>
+    /// </remarks>
+    internal uint GetDifferentialFormatIndex(SpreadsheetDifferentialFormat format)
+    {
+        // CT_Dxf is a sequence: font, numFmt, fill, alignment, border, protection.
+        DifferentialFormat differential = new();
+
+        if (format.HasFont)
+        {
+            differential.Append(CreateDifferentialFont(format));
+        }
+
+        if (format.NumberFormat is not null)
+        {
+            differential.Append(new NumberingFormat
+            {
+                NumberFormatId = AddNumberFormat(_stylesheet, format.NumberFormat),
+                FormatCode = format.NumberFormat
+            });
+        }
+
+        if (format.FillColor is not null)
+        {
+            differential.Append(new Fill(new PatternFill(new BackgroundColor { Rgb = format.FillColor })));
+        }
+
+        if (format.HasBorder)
+        {
+            differential.Append(CreateDifferentialBorder(format));
+        }
+
+        string xml = differential.OuterXml;
+        if (_differentialFormatIndexes.TryGetValue(xml, out uint existing))
+        {
+            return existing;
+        }
+
+        DifferentialFormats formats = _stylesheet.DifferentialFormats
+            ?? throw new InvalidOperationException("The differential format collection is missing.");
+        formats.Append(differential);
+        formats.Count = (uint)formats.ChildElements.Count;
+        uint index = formats.Count.Value - 1;
+        _differentialFormatIndexes[xml] = index;
+        return index;
+    }
+
     internal void Save()
     {
         _stylesheet.Save();
+    }
+
+    /// <remarks>
+    /// A dxf font is a set of changes, so <c>false</c> is written rather than left out:
+    /// <c>&lt;b val="0"/&gt;</c> takes the bold off a bold cell, where an absent <c>b</c> leaves
+    /// it alone. Children follow the order CT_Font declares them in, and there is no size or
+    /// name — see <see cref="SpreadsheetDifferentialFormat"/>.
+    /// </remarks>
+    private static Font CreateDifferentialFont(SpreadsheetDifferentialFormat format)
+    {
+        Font font = new();
+        if (format.Bold is bool bold)
+        {
+            font.Append(bold ? new Bold() : new Bold { Val = false });
+        }
+
+        if (format.Italic is bool italic)
+        {
+            font.Append(italic ? new Italic() : new Italic { Val = false });
+        }
+
+        if (format.Strikethrough is bool strikethrough)
+        {
+            font.Append(strikethrough ? new Strike() : new Strike { Val = false });
+        }
+
+        if (format.Underline is bool underline)
+        {
+            font.Append(underline ? new Underline() : new Underline { Val = UnderlineValues.None });
+        }
+
+        if (format.FontColor is not null)
+        {
+            font.Append(new Color { Rgb = format.FontColor });
+        }
+
+        return font;
+    }
+
+    // Only the sides somebody set are written, so a rule that draws a bottom edge does not also
+    // decide what the other three look like.
+    private static Border CreateDifferentialBorder(SpreadsheetDifferentialFormat format)
+    {
+        Border border = new();
+        if (format.LeftBorder is not null)
+        {
+            border.Append(CreateBorder<LeftBorder>(format.LeftBorder, format.LeftBorderColor));
+        }
+
+        if (format.RightBorder is not null)
+        {
+            border.Append(CreateBorder<RightBorder>(format.RightBorder, format.RightBorderColor));
+        }
+
+        if (format.TopBorder is not null)
+        {
+            border.Append(CreateBorder<TopBorder>(format.TopBorder, format.TopBorderColor));
+        }
+
+        if (format.BottomBorder is not null)
+        {
+            border.Append(CreateBorder<BottomBorder>(format.BottomBorder, format.BottomBorderColor));
+        }
+
+        return border;
     }
 
     private uint AddFont(Stylesheet stylesheet, SpreadsheetStylePatch patch)

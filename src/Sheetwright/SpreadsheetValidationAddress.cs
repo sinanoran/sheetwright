@@ -40,8 +40,11 @@ public sealed class SpreadsheetValidationAddress
     /// and <c>'Some Sheet'!A1</c> split naively becomes two fragments that are
     /// each an invalid address — so the qualifier this class exists to strip
     /// would have been the one input it could not read.
+    ///
+    /// Conditional formatting writes the same <c>sqref</c> and splits it here
+    /// too, so the two cannot drift apart on what counts as an address.
     /// </remarks>
-    private static IReadOnlyList<string> Split(string address)
+    internal static IReadOnlyList<string> Split(string address)
     {
         List<string> parts = [];
         StringBuilder current = new();

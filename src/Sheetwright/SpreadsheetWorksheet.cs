@@ -49,6 +49,7 @@ public sealed class SpreadsheetWorksheet
         View = new SpreadsheetWorksheetView(this);
         Drawings = new SpreadsheetDrawingCollection(this);
         DataValidations = new SpreadsheetDataValidationCollection();
+        ConditionalFormatting = new SpreadsheetConditionalFormattingCollection(this);
         Tables = new SpreadsheetTables(this);
 
         SheetData sheetData = EnsureSheetData();
@@ -84,6 +85,8 @@ public sealed class SpreadsheetWorksheet
     public SpreadsheetDrawingCollection Drawings { get; }
 
     public SpreadsheetDataValidationCollection DataValidations { get; }
+
+    public SpreadsheetConditionalFormattingCollection ConditionalFormatting { get; }
 
     public SpreadsheetTables Tables { get; }
 
@@ -173,6 +176,11 @@ public sealed class SpreadsheetWorksheet
         SheetProperties properties = OpenXmlWorksheet.GetFirstChild<SheetProperties>()
             ?? OpenXmlWorksheet.InsertAt(new SheetProperties(), 0);
         properties.CodeName = SpreadsheetTextSanitizer.Sanitize(codeName);
+    }
+
+    internal void EnsureEditable()
+    {
+        _package.EnsureEditable();
     }
 
     internal object? GetValue(int row, int column)
@@ -593,6 +601,7 @@ public sealed class SpreadsheetWorksheet
         CommitRows(styles);
         CommitMerges();
         DataValidations.Commit(OpenXmlWorksheet);
+        ConditionalFormatting.Commit(OpenXmlWorksheet, styles);
         CommitProtection();
         CommitTables();
 
@@ -851,7 +860,8 @@ public sealed class SpreadsheetWorksheet
             HashSet<string> headings = new(StringComparer.OrdinalIgnoreCase);
             for (int column = address.FromColumn; column <= address.ToColumn; column++)
             {
-                string existing = Convert.ToString(GetValue(address.FromRow, column), CultureInfo.InvariantCulture)
+                object? cellValue = GetValue(address.FromRow, column);
+                string existing = Convert.ToString(cellValue, CultureInfo.InvariantCulture)
                     ?? string.Empty;
                 string heading = SpreadsheetTableHeadings.Resolve(existing, column, headings);
 
@@ -862,7 +872,9 @@ public sealed class SpreadsheetWorksheet
                 // this here is safe because the style pass has already run and
                 // the dimension has not: a header cell created now is styled with
                 // the default and still counted in the sheet's extent.
-                if (!string.Equals(existing, heading, StringComparison.Ordinal))
+                // In addition, Excel requires table header cells to be stored as text
+                // rather than numbers or dates.
+                if (cellValue is not string str || !string.Equals(str, heading, StringComparison.Ordinal))
                 {
                     SetValue(address.FromRow, column, heading);
                 }

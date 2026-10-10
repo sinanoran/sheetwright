@@ -8,8 +8,8 @@
 
   <PropertyGroup Label="Package">
     <PackageId>Sheetwright</PackageId>
-    <Description>A small, MIT-licensed .xlsx writer over DocumentFormat.OpenXml. Styles, number formats, data validation, tables, defined names, pictures, freeze panes and auto-fit — plus a streaming writer for exports too large to hold in memory — with an API shaped like the one you already know from EPPlus, and no commercial licence.</Description>
-    <PackageTags>xlsx;excel;spreadsheet;openxml;export;csv;streaming</PackageTags>
+    <Description>A small, MIT-licensed .xlsx writer over DocumentFormat.OpenXml. Styles, number formats, data validation, conditional formatting, tables, defined names, pictures, freeze panes and auto-fit — plus a streaming writer for exports too large to hold in memory — with an API shaped like the one you already know from EPPlus, and no commercial licence.</Description>
+    <PackageTags>xlsx;excel;spreadsheet;openxml;export;csv;streaming;conditional-formatting</PackageTags>
     <!--
       Shown on nuget.org beside the version. Kept to what changed, in the same
       words as CHANGELOG.md, because a release note that restates the package

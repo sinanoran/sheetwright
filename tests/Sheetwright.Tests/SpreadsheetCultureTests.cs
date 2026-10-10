@@ -51,6 +51,111 @@ public sealed class SpreadsheetCultureTests
         Assert.Equal(HeadingFromCulture("tr-TR"), HeadingFromCulture("en-US"));
     }
 
+    [Theory]
+    [InlineData("tr-TR")]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    public void A_conditional_format_compares_with_a_full_stop_in_any_culture(string culture)
+    {
+        // A formula is parsed by Excel in the file's own spelling, which is invariant. A rule
+        // written as "greater than 1,5" on a German machine is a syntax error everywhere.
+        string[] formulas = InCulture(culture, () =>
+        {
+            using WrittenWorkbook written = WrittenWorkbook.From(package =>
+            {
+                SpreadsheetCellValueConditionalFormattingRule rule = package.Workbook.Worksheets.Add("Data")
+                    .ConditionalFormatting.AddCellValue("A1:A9", SpreadsheetConditionalFormattingOperator.Between);
+                rule.Formula.Value = 1.5D;
+                rule.Formula2.Value = 1234.75M;
+            });
+
+            return string.Join("|", ConditionalFormattingRules(written)
+                .SelectMany(rule => rule.Elements<DocumentFormat.OpenXml.Spreadsheet.Formula>())
+                .Select(formula => formula.Text));
+        }).Split('|');
+
+        Assert.Equal(["1.5", "1234.75"], formulas);
+    }
+
+    [Theory]
+    [InlineData("tr-TR")]
+    [InlineData("de-DE")]
+    public void A_colour_scale_anchor_is_written_with_a_full_stop_in_any_culture(string culture)
+    {
+        string anchors = InCulture(culture, () =>
+        {
+            using WrittenWorkbook written = WrittenWorkbook.From(package =>
+            {
+                SpreadsheetColorScaleConditionalFormattingRule rule = package.Workbook.Worksheets.Add("Data")
+                    .ConditionalFormatting.AddThreeColorScale("A1:A9");
+                rule.LowValue.SetNumber(-0.25D);
+                rule.MiddleValue!.SetPercentile(37.5D);
+                rule.HighValue.SetPercent(99.5D);
+            });
+
+            return string.Join(
+                "|",
+                ConditionalFormattingRules(written).Single()
+                    .Descendants<DocumentFormat.OpenXml.Spreadsheet.ConditionalFormatValueObject>()
+                    .Select(anchor => anchor.Val!.Value));
+        });
+
+        Assert.Equal("-0.25|37.5|99.5", anchors);
+    }
+
+    [Fact]
+    public void A_conditional_format_is_the_same_file_in_any_culture()
+    {
+        // Every kind of value a rule can carry, written on three machines. The rules and the
+        // stylesheet that backs them have to come out byte for byte the same.
+        Assert.Equal(ConditionalFormattingFromCulture("en-US"), ConditionalFormattingFromCulture("tr-TR"));
+        Assert.Equal(ConditionalFormattingFromCulture("en-US"), ConditionalFormattingFromCulture("de-DE"));
+    }
+
+    private static string ConditionalFormattingFromCulture(string culture)
+    {
+        return InCulture(culture, () =>
+        {
+            using WrittenWorkbook written = WrittenWorkbook.From(package =>
+            {
+                SpreadsheetConditionalFormattingCollection rules = package.Workbook.Worksheets.Add("Data").ConditionalFormatting;
+
+                SpreadsheetCellValueConditionalFormattingRule between =
+                    rules.AddCellValue("A1:A9", SpreadsheetConditionalFormattingOperator.Between);
+                between.Formula.Value = 0.1D;
+                between.Formula2.Value = 2.5F;
+                between.Style.NumberFormat.SetFormat("#,##0.00");
+
+                rules.AddCellValue("B1:B9", SpreadsheetConditionalFormattingOperator.LessThan)
+                    .Formula.Value = new DateTime(2026, 8, 27, 12, 0, 0);
+
+                // DateTimeOffset takes the text fallback, and its text is what a culture changes.
+                rules.AddCellValue("C1:C9", SpreadsheetConditionalFormattingOperator.Equal)
+                    .Formula.Value = new DateTimeOffset(2026, 8, 27, 9, 30, 0, TimeSpan.Zero);
+
+                // Excel's TRUE, not .NET's True — and not whatever a culture's casing makes of it.
+                rules.AddCellValue("D1:D9", SpreadsheetConditionalFormattingOperator.Equal).Formula.Value = true;
+
+                SpreadsheetColorScaleConditionalFormattingRule scale = rules.AddThreeColorScale("E1:E9");
+                scale.LowValue.SetNumber(1.25D);
+                scale.MiddleValue!.SetPercentile(62.5D);
+            });
+
+            return string.Concat(
+                string.Concat(written.Sheet("Data")
+                    .Elements<DocumentFormat.OpenXml.Spreadsheet.ConditionalFormatting>()
+                    .Select(block => block.OuterXml)),
+                written.Stylesheet.DifferentialFormats!.OuterXml,
+                written.Stylesheet.NumberingFormats!.OuterXml);
+        });
+    }
+
+    private static IEnumerable<DocumentFormat.OpenXml.Spreadsheet.ConditionalFormattingRule> ConditionalFormattingRules(
+        WrittenWorkbook written) =>
+        written.Sheet("Data")
+            .Elements<DocumentFormat.OpenXml.Spreadsheet.ConditionalFormatting>()
+            .SelectMany(block => block.Elements<DocumentFormat.OpenXml.Spreadsheet.ConditionalFormattingRule>());
+
     private static string WriteAsText(string culture, object value)
     {
         return InCulture(culture, () =>

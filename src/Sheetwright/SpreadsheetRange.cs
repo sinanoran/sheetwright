@@ -12,6 +12,7 @@ public sealed class SpreadsheetRange : IEnumerable<SpreadsheetRange>
     private SpreadsheetRangePosition? _end;
     private SpreadsheetRangeStyle? _style;
     private SpreadsheetRangeDataValidation? _dataValidation;
+    private SpreadsheetRangeConditionalFormatting? _conditionalFormatting;
 
     internal SpreadsheetRange(SpreadsheetWorksheet worksheet, SpreadsheetAddress address)
     {
@@ -30,6 +31,9 @@ public sealed class SpreadsheetRange : IEnumerable<SpreadsheetRange>
     public SpreadsheetRangeStyle Style => _style ??= new SpreadsheetRangeStyle(this);
 
     public SpreadsheetRangeDataValidation DataValidation => _dataValidation ??= new SpreadsheetRangeDataValidation(this);
+
+    public SpreadsheetRangeConditionalFormatting ConditionalFormatting =>
+        _conditionalFormatting ??= new SpreadsheetRangeConditionalFormatting(this);
 
     public object? Value
     {

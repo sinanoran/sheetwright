@@ -285,6 +285,7 @@ public sealed class SpreadsheetWorksheetTests
             sheet.View.FreezePanes(2, 1);
             sheet.Cells["A4:B4"].Merge = true;
             sheet.DataValidations.AddAnyValidation("A2");
+            sheet.ConditionalFormatting.AddDuplicateValues("A2:A9").Style.Font.SetBold(true);
             sheet.Drawings.AddPicture("logo", new MemoryStream(TestImages.Png(120, 40)));
             sheet.Tables.Add(sheet.Cells["A1:B2"], "People");
             sheet.Protect(lockEverything: true, password: "not-a-secret");
@@ -300,6 +301,7 @@ public sealed class SpreadsheetWorksheetTests
                 "sheetData",
                 "sheetProtection",
                 "mergeCells",
+                "conditionalFormatting",
                 "dataValidations",
                 "drawing",
                 "tableParts"

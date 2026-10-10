@@ -6,6 +6,35 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Conditional formatting — `sheet.ConditionalFormatting` and
+  `range.ConditionalFormatting`. Cells can be formatted by comparing their value
+  (eight comparisons, `Between` and `NotBetween` inclusive), by a formula, as
+  duplicate or unique values, or shaded on a two- or three-colour scale whose
+  points can be anchored to the lowest or highest value, a number, a percentage,
+  a percentile or a formula. Every rule but a colour scale carries a font
+  (bold, italic, underline, strikethrough, colour), a fill, borders and a number
+  format, and applies only what was set — so turning bold off is written as a
+  change rather than left out. Values to compare with are typed as cells are and
+  written in the invariant culture; identical formatting resolves to one entry in
+  the differential format table across every sheet; rules take priority in the
+  order they were added. A comparison with nothing to compare against, or a
+  second bound on a comparison that takes one, is refused before any sheet is
+  committed, so the rule can be fixed and the workbook written after all.
+- `SpreadsheetReader` and `SpreadsheetRowReader` — typed reading of existing workbooks,
+  cell coordinates, sheet names, and tabular ranges with typed getters for text,
+  integers, decimals, doubles, booleans, and dates.
+- `SpreadsheetTemplateHydrator` — stamps typed values and collections into pre-formatted
+  template workbooks by coordinate or defined name while preserving layouts, formulas,
+  and formatting.
+- `SpreadsheetNumberFormats` — standard invariant number and currency format string presets.
+
+### Fixed
+
+- Table header cells containing numbers or dates are coerced to strings so OpenXML
+  `<tableColumn name="...">` and `<c t="s">` types match, preventing Excel repair warnings.
+
 ## [0.2.0] - 2026-10-01
 
 ### Added

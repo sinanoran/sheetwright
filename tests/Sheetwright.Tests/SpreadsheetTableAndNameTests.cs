@@ -360,6 +360,28 @@ public sealed class SpreadsheetTableAndNameTests
         Assert.Contains("Nothing", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_table_whose_header_row_contains_numbers_or_dates_stores_them_as_strings()
+    {
+        using WrittenWorkbook written = WrittenWorkbook.From(package =>
+        {
+            SpreadsheetWorksheet sheet = package.Workbook.Worksheets.Add("Data");
+            sheet.Cells[1, 1].Value = 2026;
+            sheet.Cells[1, 2].Value = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            sheet.Cells[2, 1].Value = 100D;
+            sheet.Cells[2, 2].Value = 200D;
+            sheet.Tables.Add(sheet.Cells["A1:B2"], "Metrics");
+        });
+
+        Table table = TableOf(written);
+        Assert.Equal(2U, table.GetFirstChild<TableColumns>()!.Count!.Value);
+        Assert.Equal("2026", table.GetFirstChild<TableColumns>()!.Elements<TableColumn>().First().Name!.Value);
+
+        Cell cellA1 = written.WorkbookPart.WorksheetParts.Single().Worksheet!.Descendants<Cell>()
+            .First(c => c.CellReference == "A1");
+        Assert.Equal(CellValues.SharedString, cellA1.DataType?.Value);
+    }
+
     private static Table TableOf(WrittenWorkbook written) =>
         written.WorkbookPart.WorksheetParts.Single().TableDefinitionParts.Single().Table!;
 }

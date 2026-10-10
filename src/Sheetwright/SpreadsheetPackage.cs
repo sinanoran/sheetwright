@@ -222,6 +222,15 @@ public sealed class SpreadsheetPackage : IDisposable
         }
 
         EnsureEditable();
+
+        // Every sheet is checked before any is committed. Committing is not undoable — a table
+        // part, once added, is added again by a second attempt — so a rule refused halfway through
+        // the loop would leave a package that could be neither written nor fixed.
+        foreach (SpreadsheetWorksheet worksheet in Workbook.Worksheets)
+        {
+            worksheet.ConditionalFormatting.Validate();
+        }
+
         foreach (SpreadsheetWorksheet worksheet in Workbook.Worksheets)
         {
             worksheet.Commit(Styles);
@@ -330,7 +339,7 @@ public sealed class SpreadsheetPackage : IDisposable
         return false;
     }
 
-    private void EnsureEditable()
+    internal void EnsureEditable()
     {
         if (!_editable || _finalized)
         {

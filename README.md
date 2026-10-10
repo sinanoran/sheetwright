@@ -145,9 +145,9 @@ What it costs, so that the choice is a choice:
 - **Rows go in once, in order** — ascending rows, ascending columns within a row,
   and nothing can be revisited. Columns and tables are declared before the first
   row, because their XML is written ahead of the rows.
-- **One worksheet**, and no pictures, data validation, merged cells, freeze panes
-  or auto-fit. The styling is what `GetStyleIndex` takes: bold, italic, a number
-  format, wrapping.
+- **One worksheet**, and no pictures, data validation, conditional formatting,
+  merged cells, freeze panes or auto-fit. The styling is what `GetStyleIndex`
+  takes: bold, italic, a number format, wrapping.
 - **Text is written inline**, so there is no shared string table to hold open —
   and a workbook of repeated values comes out larger than the same workbook from
   `SpreadsheetPackage`.
@@ -231,6 +231,66 @@ screen: the same object has to produce the same bytes on a Turkish machine and a
 American one, or an export becomes a function of who ran it. To render a value
 for a particular reader, format it yourself and pass the string.
 
+## Conditional formatting
+
+A rule that formats the cells it matches, evaluated by Excel as the reader edits:
+
+```csharp
+SpreadsheetCellValueConditionalFormattingRule large = sheet.ConditionalFormatting
+    .AddCellValue("C2:C500", SpreadsheetConditionalFormattingOperator.GreaterThan);
+large.Formula.Value = 10_000;
+large.Style.Font.Color.SetColor("9C0006");
+large.Style.Fill.BackgroundColor.SetColor("FFC7CE");
+
+SpreadsheetFormulaConditionalFormattingRule overdue = sheet.Cells["A2:E500"]
+    .ConditionalFormatting.AddFormula();
+overdue.Formula.ExcelFormula = "AND($B2<TODAY(), $E2=\"\")";
+overdue.Style.Font.SetBold(true);
+
+sheet.ConditionalFormatting.AddDuplicateValues("A2:A500")
+    .Style.Fill.BackgroundColor.SetColor("FFEB9C");
+
+sheet.ConditionalFormatting.AddThreeColorScale("C:C");
+```
+
+- **Cell values** — `AddCellValue` with one of eight comparisons. `Between` and
+  `NotBetween` are inclusive and take an upper bound in `Formula2`; every other
+  comparison takes one value, and a `Formula2` set on one of them is refused
+  rather than dropped.
+- **Formulas** — `AddFormula` formats a cell when its formula is true. Write it
+  for the top-left cell of the range; Excel shifts the relative references for
+  the rest, so `$B2` above is "column B of this row".
+- **Duplicate and unique values** — `AddDuplicateValues` and `AddUniqueValues`.
+- **Colour scales** — `AddTwoColorScale` runs from red at the lowest value to
+  green at the highest, and `AddThreeColorScale` passes through yellow at the 50th
+  percentile. Each point can be re-anchored — `SetNumber`, `SetPercent`,
+  `SetPercentile`, `SetFormula`, `SetLowestValue`, `SetHighestValue` — and
+  recoloured through its `Color`.
+
+A value to compare with is typed exactly as a cell is: numbers are numbers, a
+`DateTime` is its serial number, `true` is `TRUE`, and text — or anything else —
+is a quoted string, all of it invariant. Text is never mistaken for a formula,
+so `Value = "=A1"` compares with those three characters; to compare with another
+cell, say so with `ExcelFormula = "$B$1"`.
+
+Every rule except a colour scale has a `Style` — font (bold, italic, underline,
+strikethrough, colour), fill, borders and a number format — and applies only what
+was set on it. That makes `SetBold(false)` a change rather than a default: it
+takes the bold off a cell that has it. There is no font name or size, because
+Excel does not apply either from a conditional format. Identical formatting
+resolves to one entry in the workbook's differential format table, however many
+rules and sheets use it, for the same reason cell styles do.
+
+Rules take priority in the order they were added, and `StopIfTrue` keeps the
+ones after it off a cell it matched. Addresses are parsed like a validation's —
+sheet qualifiers dropped, several rectangles allowed — and a whole column is
+fine. A comparison missing its value, or a formula rule with no formula, is
+refused when the workbook is written and before any sheet is committed, so the
+rule can be fixed and the workbook asked for again.
+
+Data bars, icon sets, top and bottom N, above average and the text and date
+rules are not here — fair additions when something needs one.
+
 ## What it refuses
 
 An address outside Excel's grid throws rather than being written:
@@ -264,6 +324,9 @@ sheet.DataValidations.AddAnyValidation("B1:B9 E1:E9");
 - **Data validation** — dropdowns, numeric and date bounds, text length, and
   input or error messages. The workbook you send out can enforce its own rules
   before it comes back.
+- **Conditional formatting** — value comparisons, formulas, duplicate and unique
+  values, and two- and three-colour scales, so the reader sees what needs
+  attention as they edit. See [above](#conditional-formatting).
 - **Tables** — a range promoted to an Excel table with a style and an autofilter.
   Column names come from the first row of the range. An empty heading becomes its
   column letter and a repeated one gains a suffix, because Excel refuses
@@ -287,10 +350,11 @@ sheet.DataValidations.AddAnyValidation("B1:B9 E1:E9");
   value.
 - **Edit an existing workbook.** `new SpreadsheetPackage(stream)` opens
   read-only, and every write throws. Reading is there so a test — or an import —
-  can look at what was produced.
-- **Charts, pivot tables, conditional formatting, comments.** None of them are
-  here. Each is a fair thing to add when something needs one, and none should be
-  added on the argument that a spreadsheet library ought to have it.
+  can look at what was produced (and `SpreadsheetTemplateHydrator` is provided for
+  stamping values into pre-formatted template workbooks).
+- **Charts, pivot tables, comments.** None of them are here. Each is a fair
+  thing to add when something needs one, and none should be added on the
+  argument that a spreadsheet library ought to have it.
 
 ## How it is built
 
@@ -305,9 +369,11 @@ repository's responsibility rather than the SDK's.
 `SpreadsheetStreamWriter` goes further and writes its XML as text, without the
 SDK at all, which is what lets it forget a row as soon as it has written it. Its
 tests run everything it produces through `OpenXmlValidator` as well as reading
-it, because nothing checks the schema on the way out.
+it, because nothing checks the schema on the way out. The conditional formatting
+tests do the same, for the part of `SpreadsheetPackage` that assembles its rules
+and their differential formats by hand.
 
-That is why `tests/Sheetwright.Tests` opens almost everything it writes. 270
+That is why `tests/Sheetwright.Tests` opens almost everything it writes. 378
 tests, no container, no database; they run anywhere the SDK does.
 
 ```bash

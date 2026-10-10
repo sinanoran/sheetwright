@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using DocumentFormat.OpenXml.Validation;
 
 namespace Sheetwright.Tests;
 
@@ -117,6 +118,15 @@ internal sealed class WrittenWorkbook : IDisposable
     /// </remarks>
     internal IReadOnlyList<string> ChildOrder(string sheetName) =>
         [.. Sheet(sheetName).ChildElements.Select(element => element.LocalName)];
+
+    /// <summary>Everything <see cref="OpenXmlValidator"/> finds wrong with the package, one line per fault.</summary>
+    /// <remarks>
+    /// The SDK checks nothing on the way out — an element it was handed in the wrong place is
+    /// written in the wrong place — so a part whose XML is assembled here rather than by Excel is
+    /// checked on the way back in.
+    /// </remarks>
+    internal IReadOnlyList<string> SchemaErrors() =>
+        [.. new OpenXmlValidator().Validate(_document).Select(error => $"{error.Path?.XPath}: {error.Description}")];
 
     public void Dispose()
     {
