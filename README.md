@@ -25,9 +25,10 @@ frozen header row, a date that reads as a date, and a dropdown on the column the
 are going to send back filled in. CSV gives you none of that, and a
 culture-dependent decimal separator besides.
 
-The surface deliberately reads like EPPlus's — `package.Workbook.Worksheets.Add`,
-`sheet.Cells[1, 1].Value` — because that is the vocabulary anybody who has
-written an Excel export already has. The difference is the licence.
+The surface deliberately uses the vocabulary anybody who has written an Excel
+export in .NET already has — `package.Workbook.Worksheets.Add`,
+`sheet.Cells[1, 1].Value` — so there is little new to learn, and no commercial
+licence to buy.
 
 ## Writing a workbook
 
