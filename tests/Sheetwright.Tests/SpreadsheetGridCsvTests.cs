@@ -93,6 +93,10 @@ public sealed class SpreadsheetGridCsvTests
     [InlineData("+1")]
     [InlineData("-1+1")]
     [InlineData("@SUM(A1)")]
+    [InlineData("＝1+1")]
+    [InlineData("＋1")]
+    [InlineData("－1+1")]
+    [InlineData("＠SUM(A1)")]
     public void Text_that_Excel_would_treat_as_a_formula_is_neutralised(string hostile)
     {
         // Prefixed with an apostrophe, which is what Excel itself writes to mean
@@ -119,15 +123,20 @@ public sealed class SpreadsheetGridCsvTests
             StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void A_heading_is_guarded_the_same_way_as_a_value()
+    [Theory]
+    [InlineData("=cmd")]
+    [InlineData("＝cmd")]
+    [InlineData("＋cmd")]
+    [InlineData("－cmd")]
+    [InlineData("＠cmd")]
+    public void A_heading_is_guarded_the_same_way_as_a_value(string heading)
     {
         // Headings are as caller-supplied as the rows are.
         byte[] bytes = SpreadsheetGridCsv.Write<Row>(
-            [new("=cmd", row => row.Count)],
+            [new(heading, row => row.Count)],
             [new("x", 1, default)]);
 
-        Assert.Contains("'=cmd", Text(bytes), StringComparison.Ordinal);
+        Assert.Contains("'" + heading, Text(bytes), StringComparison.Ordinal);
     }
 
     [Fact]
