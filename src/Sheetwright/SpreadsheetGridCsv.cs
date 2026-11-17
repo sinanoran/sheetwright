@@ -46,7 +46,10 @@ public static class SpreadsheetGridCsv
     /// machine of whoever opened the export. The data here is user-supplied —
     /// display names, search terms, audit payloads — so this is reachable.
     /// </remarks>
-    private static readonly char[] FormulaLeaders = ['=', '+', '-', '@', '\t', '\r'];
+    // The last four are the full-width forms of = + - @, which a spreadsheet
+    // opened with an East Asian input locale can read as the ASCII sign.
+    private static readonly char[] FormulaLeaders =
+        ['=', '+', '-', '@', '\t', '\r', '＝', '＋', '－', '＠'];
 
     public static byte[] Write<T>(
         IReadOnlyList<SpreadsheetGridColumn<T>> columns,

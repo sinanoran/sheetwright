@@ -6,6 +6,14 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-17
+
+### Fixed
+
+- CSV formula guard: text beginning with the full-width forms of `=`, `+`, `-`
+  and `@` (U+FF1D, U+FF0B, U+FF0D, U+FF20) is now prefixed with an apostrophe
+  like the ASCII forms, in values and headings.
+
 ## [0.3.1] - 2026-10-11
 
 ### Changed
@@ -99,7 +107,8 @@ survived that use rather than a first draft.
   with CSV formula injection neutralised.
 - Targets `net8.0`, `net9.0` and `net10.0`.
 
-[Unreleased]: https://github.com/sinanoran/sheetwright/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/sinanoran/sheetwright/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/sinanoran/sheetwright/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sinanoran/sheetwright/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sinanoran/sheetwright/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sinanoran/sheetwright/compare/v0.1.0...v0.2.0
