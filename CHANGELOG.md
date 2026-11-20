@@ -6,6 +6,42 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-20
+
+### Added
+
+- Readers for files this library did not write, for an import: `SpreadsheetWorkbookReader` reads any
+  `.xlsx` a row at a time and `SpreadsheetCsvReader` reads any CSV a row at a time. Both return
+  `SpreadsheetRow`s of `SpreadsheetCellValue`s (text, number as `decimal`, boolean, date, error, empty) and
+  are configured by `SpreadsheetReaderOptions`. Neither loads the file: the workbook reader advances an
+  XML reader over the worksheet and holds only the shared-string table, and the CSV reader holds one record.
+- Workbook reading: dates are recognised by their cell number format (built-in and custom formats; the 1900
+  system's non-existent 29 February and the 1904 system are both handled); a formula is read as its stored
+  value and never evaluated; rich text is joined without its phonetic guide; inline strings, booleans,
+  errors and ISO dates are read; the strict namespaces read like the transitional ones; sheets are listed
+  with their visibility; cells with no reference follow one another.
+- CSV reading: RFC 4180 quoting including line breaks in quotes; CRLF, LF and lone CR; the encoding from a
+  UTF-8, UTF-16 LE or UTF-16 BE byte-order mark (UTF-8 otherwise, strictly: invalid bytes are refused, not
+  replaced) or from the options; the separator from a `sep=` line or by measuring the first rows (comma,
+  semicolon, tab, pipe); a stream that cannot seek.
+- The apostrophe rule: the CSV reader takes off the one apostrophe `SpreadsheetGridCsv` puts in front of
+  text that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a full-width form of the first
+  four, so a file the writer wrote reads back as the values that went in (`UnescapeFormulaGuard`). The
+  writer and the reader share one list of leader characters. One text cannot be told apart from a guarded
+  one: a text that itself begins with an apostrophe and then a leader.
+- Limits, checked while the file is read and before the memory is allocated, each refused with a
+  `SpreadsheetReadLimitException` that names it: `MaxUncompressedBytes`, `MaxCompressionRatio`,
+  `MaxSharedStrings`, `MaxSharedStringCharacters`, `MaxParts`, `MaxRows`, `MaxColumns` and
+  `MaxCellCharacters`. No document type declaration is processed, no external resource is read, a
+  relationship that leaves the package is refused, and a tag, comment or run of text longer than any cell
+  can be is refused before the XML reader holds it.
+- `net11.0` is a target framework.
+
+### Changed
+
+- Built with the .NET 11 SDK; `xunit.v3` 4.0.3; the GitHub Actions the workflows use are at their latest
+  major versions. `DocumentFormat.OpenXml` stays at 3.5.1, the latest stable.
+
 ## [0.3.2] - 2026-11-17
 
 ### Fixed
@@ -107,7 +143,8 @@ survived that use rather than a first draft.
   with CSV formula injection neutralised.
 - Targets `net8.0`, `net9.0` and `net10.0`.
 
-[Unreleased]: https://github.com/sinanoran/sheetwright/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/sinanoran/sheetwright/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sinanoran/sheetwright/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/sinanoran/sheetwright/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sinanoran/sheetwright/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sinanoran/sheetwright/compare/v0.2.0...v0.3.0
