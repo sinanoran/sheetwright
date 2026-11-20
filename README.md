@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Sheetwright.svg)](https://www.nuget.org/packages/Sheetwright)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Sheetwright writes `.xlsx` files, and reads back the ones it wrote.**
+**Sheetwright writes `.xlsx` files, reads back the ones it wrote, and reads the spreadsheets and CSV files people upload — a row at a time, within limits.**
 
 It is a small API over [DocumentFormat.OpenXml](https://github.com/dotnet/Open-XML-SDK),
 which is MIT-licensed and maintained by Microsoft. Sheetwright is MIT-licensed
@@ -15,7 +15,7 @@ project stops being a hobby.
 dotnet add package Sheetwright
 ```
 
-Targets `net8.0`, `net9.0` and `net10.0`. One dependency.
+Targets `net8.0`, `net9.0`, `net10.0` and `net11.0`. One dependency.
 
 ## Why it exists
 
@@ -231,6 +231,115 @@ renders a type the writer does not know. A workbook is a file rather than a
 screen: the same object has to produce the same bytes on a Turkish machine and an
 American one, or an export becomes a function of who ran it. To render a value
 for a particular reader, format it yourself and pass the string.
+
+## Reading a file you did not write
+
+`SpreadsheetReader` reads back what Sheetwright wrote, into memory, by cell
+address. The two readers below are for the other case: an import, where a person
+uploads a spreadsheet or a CSV and the library reads it **as a stream, one row
+at a time, within limits**, because the file is from a stranger.
+
+```csharp
+using SpreadsheetWorkbookReader workbook = SpreadsheetWorkbookReader.Open(stream);
+
+foreach (SpreadsheetSheetInfo sheet in workbook.Sheets)       // name, index, hidden or not
+{
+    Console.WriteLine(sheet.Name);
+}
+
+foreach (SpreadsheetRow row in workbook.ReadRows("Invoices"))
+{
+    int number = row.RowNumber;                               // the row number the spreadsheet shows
+    SpreadsheetCellValue name = row[0];                        // columns count from 0
+    if (name.Kind == SpreadsheetCellKind.Text) { /* name.Text */ }
+}
+
+using SpreadsheetCsvReader csv = SpreadsheetCsvReader.Open(stream);
+Console.WriteLine($"{csv.Encoding.WebName}, separator '{csv.Delimiter}'");
+foreach (SpreadsheetRow row in csv.ReadRows()) { /* every cell is text */ }
+```
+
+A cell is a `SpreadsheetCellValue` with a `Kind`: `Empty`, `Text`, `Number` (a
+`decimal`), `Boolean`, `Date` or `Error`. A row is an object nothing else holds,
+so it can be kept after the next one is read. **A row ends at its last cell that
+has a value**, in both readers (a formatted but empty cell, or a CSV record that
+ends in a separator, does not make it longer), and a column past the end is an
+empty cell and not an error, because the rows of one file have different lengths.
+Only cells with a value are stored, so a row with one cell in column 16,000 costs
+one cell; `row[column]` is cheap and `row.Cells` builds the whole run. An empty
+string is an empty cell, in a workbook as in a CSV. Rows with nothing in them are
+skipped (they keep their place in the numbering) unless `IncludeEmptyRows` is set.
+`new SpreadsheetRow(number, cells)` makes a row by hand, for testing code that
+reads them.
+
+**A workbook** is read the way Excel reads it. A date is a number whose cell
+format is a date format, so it comes back as a `DateTime` (the 1900 system's
+phantom 29 February and the 1904 system of a Mac workbook are both handled), and
+the serial number the file stores stays in `Number`, which is what to use for an
+elapsed time such as `[h]:mm`; a formula is the value Excel stored beside it and
+is never evaluated, and a formula with no stored value is empty; rich text is
+joined; a number a `decimal` cannot hold, too big or too small or not a number,
+comes back as the text the file has rather than as zero. The strict namespaces
+read the same as the transitional ones. The stream must be seekable (a zip's
+index is at its end), and the XML parts must be UTF-8, as every program that
+writes a workbook writes them.
+
+**A CSV** is read the way the machine that wrote it meant. The start of the file
+(64 KiB) is looked at once, to choose the encoding (a UTF-8, UTF-16 LE or UTF-16
+BE byte-order mark, otherwise UTF-8) and the separator (a `sep=;` first line,
+otherwise whichever of comma, semicolon, tab and pipe splits the first rows the
+same way most consistently, ignoring separators inside quotes); the choices are
+readable on the reader and can be set in the options. RFC 4180 quoting works,
+including line breaks inside quotes, and records may end in CRLF, LF or a lone
+CR. Bytes that are not valid in the encoding are refused, not replaced, so that
+a caller can offer another one; an encoding given in the options is read just as
+strictly, even if the object passed would replace what it cannot decode. Every
+cell of a CSV is text: what `12.480,00`
+means depends on the culture of whoever wrote it, and that is for the caller to
+decide.
+
+**The apostrophe rule.** `SpreadsheetGridCsv` puts an apostrophe in front of
+text that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a
+full-width form of the first four, so Excel cannot run it. The CSV reader takes
+exactly one such apostrophe off (`UnescapeFormulaGuard`, on by default), so a
+file this library wrote reads back as the values that went in. Any other
+apostrophe is data. The one thing it cannot tell apart is a text that itself
+begins with an apostrophe and then a leader (`'=x`): the writer does not guard
+it, and the reader cannot know the apostrophe was the author's.
+
+### Limits
+
+Every limit is checked while the file is read and before the memory for the
+content is allocated. A file past one is refused with a
+`SpreadsheetReadLimitException` whose `Limit` names it; nothing is ever
+truncated, because a reader that quietly stopped would import half a file.
+
+| Option | Default | What it bounds |
+|---|---|---|
+| `MaxUncompressedBytes` | 200 MB | The sizes the zip declares, added up at open; no part can be read past its own declared size, so one read of the workbook never decompresses more than this |
+| `MaxCompressionRatio` | 100 | One XML part's uncompressed ÷ compressed size, from its first mebibyte on (spreadsheet XML compresses 5 to 20 times); pictures and other parts that are never read are not held to it |
+| `MaxSharedStrings` | 1,000,000 | Entries in the shared-string table, counted as it is read |
+| `MaxSharedStringCharacters` | 50,000,000 | Characters in the whole table |
+| `MaxParts` | 1,000 | Entries in the package, and relationships in one part |
+| `MaxRows` | 1,048,576 | Rows returned (empty rows skipped do not count) |
+| `MaxColumns` | 16,384 | Columns in a row (at most 1,000,000) |
+| `MaxCellCharacters` | 32,767 | Characters in one cell, counted as it is read |
+
+The zip is not extracted, no relationship is followed outside the package, no
+external resource is read, and no document type declaration is processed, so
+there is no entity to expand. The bytes of every XML part are followed as they
+are decompressed, and a single token (a start tag with its attributes, a comment,
+a CDATA section, a run of text) longer than any cell can be is refused before the
+XML reader holds it; a `>` inside an attribute value does not end a tag, and
+markup inside CDATA does not end a section. Two sheets that are one part of the
+package are refused. The defaults are the file format's own ceilings; a caller
+that knows its own sets them lower, and the size of the upload the caller accepts
+still bounds the work of reading the zip's index.
+
+A file that is not a zip, not a workbook, or not well-formed is an
+`InvalidDataException` and never contains a cell of the file in its message.
+The readers are synchronous and not thread-safe; dispose them to release the
+stream (or pass `leaveOpen: true`).
 
 ## Conditional formatting
 

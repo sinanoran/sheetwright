@@ -35,22 +35,6 @@ public static class SpreadsheetGridCsv
     /// </remarks>
     public const string ContentType = "text/csv; charset=utf-8";
 
-    /// <summary>
-    /// Characters that make Excel read a cell as a formula rather than as text.
-    /// </summary>
-    /// <remarks>
-    /// This is the CSV-only half of a real vulnerability. In a workbook a string
-    /// is written as a string and Excel never evaluates it; in CSV there is no
-    /// type, so a display name of <c>=1+1</c> becomes a formula, and one of
-    /// <c>=HYPERLINK(...)</c> or a <c>DDE</c> call is an attack that runs on the
-    /// machine of whoever opened the export. The data here is user-supplied —
-    /// display names, search terms, audit payloads — so this is reachable.
-    /// </remarks>
-    // The last four are the full-width forms of = + - @, which a spreadsheet
-    // opened with an East Asian input locale can read as the ASCII sign.
-    private static readonly char[] FormulaLeaders =
-        ['=', '+', '-', '@', '\t', '\r', '＝', '＋', '－', '＠'];
-
     public static byte[] Write<T>(
         IReadOnlyList<SpreadsheetGridColumn<T>> columns,
         IEnumerable<T> rows)
@@ -118,11 +102,15 @@ public static class SpreadsheetGridCsv
 
     private static string Field(string value, bool quoteLeaders)
     {
-        if (quoteLeaders && value.Length > 0 && Array.IndexOf(FormulaLeaders, value[0]) >= 0)
+        if (quoteLeaders && value.Length > 0 && SpreadsheetFormulaGuard.IsLeader(value[0]))
         {
             // A leading apostrophe is what Excel itself writes to mean "this is
             // text". It is visible in a plain-text reader, which is the trade:
             // one stray character beats arbitrary evaluation.
+            // SpreadsheetCsvReader takes exactly this apostrophe off again, so a file
+            // written here reads back as the values that went in; the one text it
+            // cannot tell from a guarded one is a text that starts with an
+            // apostrophe and then a leader, which is written as it is.
             value = "'" + value;
         }
 

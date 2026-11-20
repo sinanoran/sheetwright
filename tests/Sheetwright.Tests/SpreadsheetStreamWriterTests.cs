@@ -24,6 +24,7 @@ namespace Sheetwright.Tests;
 /// headings are resolved up front and the header cells are written from them.
 /// </para>
 /// </remarks>
+[Collection(HeapCollection.Name)]
 public sealed class SpreadsheetStreamWriterTests
 {
     [Fact]
