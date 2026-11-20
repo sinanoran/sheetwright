@@ -16,13 +16,18 @@ All notable changes to this project are recorded here. The format follows
   are configured by `SpreadsheetReaderOptions`. Neither loads the file: the workbook reader advances an
   XML reader over the worksheet and holds only the shared-string table, and the CSV reader holds one record.
 - Workbook reading: dates are recognised by their cell number format (built-in and custom formats; the 1900
-  system's non-existent 29 February and the 1904 system are both handled); a formula is read as its stored
-  value and never evaluated; rich text is joined without its phonetic guide; inline strings, booleans,
-  errors and ISO dates are read; the strict namespaces read like the transitional ones; sheets are listed
-  with their visibility; cells with no reference follow one another.
+  system's non-existent 29 February and the 1904 system are both handled) and keep the serial number the file
+  stores in `SpreadsheetCellValue.Number`, for elapsed times; a formula is read as its stored value and never
+  evaluated; an empty string is an empty cell; rich text is joined without its phonetic guide; inline strings,
+  booleans, errors and ISO dates are read; a number a `decimal` cannot hold (too big, too small, not a
+  number) comes back as the text the file has; the strict namespaces read like the transitional ones; sheets
+  are listed with their visibility; cells with no reference follow one another.
+- A row (`SpreadsheetRow`) ends at its last cell with a value in both readers and stores only cells with a
+  value, so a row with one cell at the far right costs one cell. `new SpreadsheetRow(number, cells)` makes
+  one by hand.
 - CSV reading: RFC 4180 quoting including line breaks in quotes; CRLF, LF and lone CR; the encoding from a
   UTF-8, UTF-16 LE or UTF-16 BE byte-order mark (UTF-8 otherwise, strictly: invalid bytes are refused, not
-  replaced) or from the options; the separator from a `sep=` line or by measuring the first rows (comma,
+  replaced; an encoding passed in the options is read just as strictly) or from the options; the separator from a `sep=` line or by measuring the first rows (comma,
   semicolon, tab, pipe); a stream that cannot seek.
 - The apostrophe rule: the CSV reader takes off the one apostrophe `SpreadsheetGridCsv` puts in front of
   text that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a full-width form of the first
@@ -33,8 +38,9 @@ All notable changes to this project are recorded here. The format follows
   `SpreadsheetReadLimitException` that names it: `MaxUncompressedBytes`, `MaxCompressionRatio`,
   `MaxSharedStrings`, `MaxSharedStringCharacters`, `MaxParts`, `MaxRows`, `MaxColumns` and
   `MaxCellCharacters`. No document type declaration is processed, no external resource is read, a
-  relationship that leaves the package is refused, and a tag, comment or run of text longer than any cell
-  can be is refused before the XML reader holds it.
+  relationship that leaves the package is refused, two sheets that are one part are refused, and the XML
+  parts (which must be UTF-8) are followed as they are decompressed so that a single tag, comment, CDATA
+  section or run of text longer than any cell can be is refused before the XML reader holds it.
 - `net11.0` is a target framework.
 
 ### Changed

@@ -153,24 +153,32 @@ public sealed class SpreadsheetCsvReader : IDisposable
 
         while (true)
         {
+            if (recordNumber == int.MaxValue)
+            {
+                throw new SpreadsheetReadLimitException(
+                    SpreadsheetReadLimit.MaxRows,
+                    _options.MaxRows,
+                    "the file has more records than a row number can count.");
+            }
+
             recordNumber++;
             if (!TryReadRecord(recordNumber, fields, field))
             {
                 yield break;
             }
 
-            SpreadsheetCellValue[] cells = new SpreadsheetCellValue[fields.Count];
-            bool empty = true;
-            for (int index = 0; index < cells.Length; index++)
+            List<int> columns = [];
+            List<SpreadsheetCellValue> values = [];
+            for (int index = 0; index < fields.Count; index++)
             {
                 if (fields[index].Length > 0)
                 {
-                    cells[index] = SpreadsheetCellValue.FromText(fields[index]);
-                    empty = false;
+                    columns.Add(index);
+                    values.Add(SpreadsheetCellValue.FromText(fields[index]));
                 }
             }
 
-            if (empty && !_options.IncludeEmptyRows)
+            if (columns.Count == 0 && !_options.IncludeEmptyRows)
             {
                 continue;
             }
@@ -184,7 +192,7 @@ public sealed class SpreadsheetCsvReader : IDisposable
             }
 
             returned++;
-            yield return new SpreadsheetRow(recordNumber, cells);
+            yield return new SpreadsheetRow(recordNumber, [.. columns], [.. values]);
         }
     }
 
@@ -284,7 +292,11 @@ public sealed class SpreadsheetCsvReader : IDisposable
 
     private void Append(int recordNumber, StringBuilder field, char character)
     {
-        if (field.Length >= _options.MaxCellCharacters)
+        // One more for the apostrophe of a guarded field, which is taken off before the length is final;
+        // EndField checks the length again once it has.
+        int allowed = _options.MaxCellCharacters
+            + (_options.UnescapeFormulaGuard && field.Length > 0 && field[0] == '\'' ? 1 : 0);
+        if (field.Length >= allowed)
         {
             throw new SpreadsheetReadLimitException(
                 SpreadsheetReadLimit.MaxCellCharacters,
@@ -314,6 +326,14 @@ public sealed class SpreadsheetCsvReader : IDisposable
             && SpreadsheetFormulaGuard.IsLeader(text[1]))
         {
             text = text[1..];
+        }
+
+        if (text.Length > _options.MaxCellCharacters)
+        {
+            throw new SpreadsheetReadLimitException(
+                SpreadsheetReadLimit.MaxCellCharacters,
+                _options.MaxCellCharacters,
+                $"a cell in row {recordNumber} has more characters than that.");
         }
 
         fields.Add(text);
@@ -400,6 +420,12 @@ public sealed class SpreadsheetCsvReader : IDisposable
     {
         if (requested is not null)
         {
+            // Read strictly whatever the caller passed: Encoding.UTF8 and the code pages replace what they cannot
+            // decode, and a replaced byte is a changed name that nobody was told about.
+            Encoding strict = (Encoding)requested.Clone();
+            strict.DecoderFallback = DecoderFallback.ExceptionFallback;
+            requested = strict;
+
             // Whether or not the encoding writes a mark of its own, a file in its family may start with one,
             // and a mark is not part of the first cell.
             int mark = requested.CodePage switch

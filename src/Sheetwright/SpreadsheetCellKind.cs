@@ -17,7 +17,8 @@ public enum SpreadsheetCellKind
 
     /// <summary>
     /// A date or a time of day: a number whose cell format is a date format, or a date stored as such. A
-    /// time with no date has the date 30 December 1899.
+    /// time with no date has the date 30 December 1899 (1 January 1904 in a workbook that counts from 1904).
+    /// The serial number the file stores is in <see cref="SpreadsheetCellValue.Number"/>.
     /// </summary>
     Date,
 

@@ -128,7 +128,7 @@ public sealed class SpreadsheetCsvReaderTests
 
         // The line is data: it is split on the separator the file is detected to have, like any other row.
         Assert.Equal(2, rows.Count);
-        Assert.Equal(["sep=", string.Empty], rows[0]);
+        Assert.Equal(["sep="], rows[0]);
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class SpreadsheetCsvReaderTests
         List<string[]> rows = Read("a,b\n\n1,2\n", new SpreadsheetReaderOptions { IncludeEmptyRows = true });
 
         Assert.Equal(3, rows.Count);
-        Assert.Equal([string.Empty], rows[1]);
+        Assert.Empty(rows[1]);
     }
 
     [Fact]
@@ -219,8 +219,8 @@ public sealed class SpreadsheetCsvReaderTests
     {
         List<string[]> rows = Read("a,b,c\n1,2\n3,4,5,6\n7,8,\n");
 
-        Assert.Equal([3, 2, 4, 3], rows.Select(row => row.Length));
-        Assert.Equal(string.Empty, rows[3][2]);
+        // A row ends at its last cell with a value, so a trailing separator does not make it longer.
+        Assert.Equal([3, 2, 4, 2], rows.Select(row => row.Length));
     }
 
     [Fact]

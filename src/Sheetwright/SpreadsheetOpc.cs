@@ -76,7 +76,7 @@ internal static class SpreadsheetOpc
     }
 
     /// <summary>The relationships in a relationships part, in order.</summary>
-    internal static List<Relationship> Read(Stream part, string partName)
+    internal static List<Relationship> Read(Stream part, string partName, SpreadsheetReaderOptions options)
     {
         List<Relationship> relationships = [];
         using XmlReader reader = SpreadsheetXml.Create(part);
@@ -91,6 +91,14 @@ internal static class SpreadsheetOpc
                 if (id is null || type is null || target is null)
                 {
                     continue;
+                }
+
+                if (relationships.Count >= options.MaxParts)
+                {
+                    throw new SpreadsheetReadLimitException(
+                        SpreadsheetReadLimit.MaxParts,
+                        options.MaxParts,
+                        $"part '{partName}' has more relationships than that.");
                 }
 
                 bool external = string.Equals(reader.GetAttribute("TargetMode"), "External", StringComparison.OrdinalIgnoreCase);

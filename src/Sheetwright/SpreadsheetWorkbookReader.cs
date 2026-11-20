@@ -184,7 +184,10 @@ public sealed class SpreadsheetWorkbookReader : IDisposable
                     "the parts of the package declare more than that when decompressed.");
             }
 
-            if (entry.Length > SpreadsheetBoundedPartStream.RatioFloorBytes
+            // Only XML is read, so only XML is held to a ratio: a flat-colour picture compresses a thousand to
+            // one and is nobody's concern. What is read is checked again, byte by byte, as it is decompressed.
+            if (IsXmlPart(entry.FullName)
+                && entry.Length > SpreadsheetBoundedPartStream.RatioFloorBytes
                 && entry.Length > (long)options.MaxCompressionRatio * Math.Max(entry.CompressedLength, 1))
             {
                 throw new SpreadsheetReadLimitException(
@@ -206,6 +209,12 @@ public sealed class SpreadsheetWorkbookReader : IDisposable
         }
 
         return entries;
+    }
+
+    private static bool IsXmlPart(string name)
+    {
+        return name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
     }
 
     private string FindWorkbookPart()
@@ -240,12 +249,22 @@ public sealed class SpreadsheetWorkbookReader : IDisposable
     private List<SpreadsheetOpc.Relationship> ReadRelationshipsOf(string relationshipsPart)
     {
         using Stream stream = OpenPart(relationshipsPart);
-        return SpreadsheetOpc.Read(stream, relationshipsPart);
+        return SpreadsheetOpc.Read(stream, relationshipsPart, _options);
     }
 
     private bool ReadSheets(string workbookPart, List<SpreadsheetOpc.Relationship> relationships)
     {
         bool date1904 = false;
+
+        // By id, once: a workbook may name a million sheets, and looking each up in a list of a million
+        // relationships is a hang. The first relationship with an id is the one that counts.
+        Dictionary<string, SpreadsheetOpc.Relationship> byId = new(StringComparer.Ordinal);
+        foreach (SpreadsheetOpc.Relationship candidate in relationships)
+        {
+            byId.TryAdd(candidate.Id, candidate);
+        }
+
+        HashSet<string> sheetParts = new(StringComparer.OrdinalIgnoreCase);
         using Stream stream = OpenPart(workbookPart);
         using XmlReader reader = SpreadsheetXml.Create(stream);
 
@@ -269,8 +288,8 @@ public sealed class SpreadsheetWorkbookReader : IDisposable
                     continue;
                 }
 
-                SpreadsheetOpc.Relationship? relationship = relationships.FirstOrDefault(r => r.Id == id);
-                if (relationship is null || relationship.External || !SpreadsheetOpc.IsType(relationship, SpreadsheetOpc.WorksheetType))
+                if (!byId.TryGetValue(id, out SpreadsheetOpc.Relationship? relationship)
+                    || relationship.External || !SpreadsheetOpc.IsType(relationship, SpreadsheetOpc.WorksheetType))
                 {
                     continue;
                 }
@@ -279,6 +298,11 @@ public sealed class SpreadsheetWorkbookReader : IDisposable
                 if (!_entries.ContainsKey(part))
                 {
                     throw new InvalidDataException($"The workbook names a worksheet part ({part}) that is not in the package.");
+                }
+
+                if (!sheetParts.Add(part))
+                {
+                    throw new InvalidDataException("Two sheets of the workbook are the same part of the package.");
                 }
 
                 SpreadsheetSheetVisibility visibility = reader.GetAttribute("state") switch

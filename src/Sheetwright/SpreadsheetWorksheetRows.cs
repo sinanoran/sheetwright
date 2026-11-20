@@ -31,6 +31,17 @@ internal sealed class SpreadsheetWorksheetRows
     private readonly string[] _sharedStrings;
     private readonly bool[] _dateStyles;
     private readonly bool _date1904;
+    private static readonly string[] IsoDateFormats =
+    [
+        "yyyy-MM-dd",
+        "yyyy-MM-ddTHH:mm",
+        "yyyy-MM-ddTHH:mm:ss",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
+        "yyyy-MM-ddTHH:mmK",
+        "yyyy-MM-ddTHH:mm:ssK",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFFK",
+    ];
+
     private readonly StringBuilder _value = new();
     private readonly StringBuilder _inline = new();
     private readonly List<(int Column, SpreadsheetCellValue Value)> _cells = [];
@@ -87,8 +98,8 @@ internal sealed class SpreadsheetWorksheetRows
                     int rowNumber = ReadRowNumber(previousRow);
                     previousRow = rowNumber;
 
-                    SpreadsheetCellValue[] cells = ReadRow(rowNumber);
-                    if (cells.Length == 0 && !_options.IncludeEmptyRows)
+                    SpreadsheetRow cells = ReadRow(rowNumber);
+                    if (cells.IsEmpty && !_options.IncludeEmptyRows)
                     {
                         continue;
                     }
@@ -102,7 +113,7 @@ internal sealed class SpreadsheetWorksheetRows
                     }
 
                     returned++;
-                    yield return new SpreadsheetRow(rowNumber, cells);
+                    yield return cells;
                 }
                 else if (_reader.NodeType == XmlNodeType.EndElement && inSheetData && _reader.Depth == sheetDataDepth)
                 {
@@ -135,9 +146,9 @@ internal sealed class SpreadsheetWorksheetRows
     }
 
     /// <summary>
-    /// The cells of the row the reader is on, as a dense array that ends at the last cell with a value.
+    /// The cells of the row the reader is on that have a value, as a row that ends at the last of them.
     /// </summary>
-    private SpreadsheetCellValue[] ReadRow(int rowNumber)
+    private SpreadsheetRow ReadRow(int rowNumber)
     {
         _cells.Clear();
 
@@ -166,18 +177,15 @@ internal sealed class SpreadsheetWorksheetRows
             }
         }
 
-        if (_cells.Count == 0)
+        int[] columns = new int[_cells.Count];
+        SpreadsheetCellValue[] values = new SpreadsheetCellValue[_cells.Count];
+        for (int index = 0; index < columns.Length; index++)
         {
-            return [];
+            columns[index] = _cells[index].Column - 1;
+            values[index] = _cells[index].Value;
         }
 
-        SpreadsheetCellValue[] row = new SpreadsheetCellValue[_cells[^1].Column];
-        foreach ((int column, SpreadsheetCellValue value) in _cells)
-        {
-            row[column - 1] = value;
-        }
-
-        return row;
+        return new SpreadsheetRow(rowNumber, columns, values);
     }
 
     private int ReadColumn(int previousColumn, int rowNumber)
@@ -232,7 +240,6 @@ internal sealed class SpreadsheetWorksheetRows
     {
         string? type = _reader.GetAttribute("t");
         int style = SpreadsheetXml.TryParseInt(_reader.GetAttribute("s"), out int parsedStyle) ? parsedStyle : 0;
-        string where = $"a cell in row {rowNumber.ToString(CultureInfo.InvariantCulture)}";
 
         _value.Clear();
         _inline.Clear();
@@ -250,12 +257,12 @@ internal sealed class SpreadsheetWorksheetRows
                     if (_reader.LocalName == "v")
                     {
                         hasValue = true;
-                        SpreadsheetXml.ReadText(_reader, _partName, _value, _options, where);
+                        SpreadsheetXml.ReadText(_reader, _partName, _value, _options, "a cell", rowNumber);
                     }
                     else if (_reader.LocalName == "is")
                     {
                         hasInline = true;
-                        SpreadsheetXml.ReadStringItem(_reader, _partName, _inline, _options, where);
+                        SpreadsheetXml.ReadStringItem(_reader, _partName, _inline, _options, "a cell", rowNumber);
                     }
                 }
                 else if (_reader.NodeType == XmlNodeType.EndElement && _reader.Depth == cellDepth)
@@ -275,10 +282,10 @@ internal sealed class SpreadsheetWorksheetRows
             case "inlineStr":
                 if (hasInline)
                 {
-                    return SpreadsheetCellValue.FromText(_inline.ToString());
+                    return Text(_inline);
                 }
 
-                return hasValue ? SpreadsheetCellValue.FromText(_value.ToString()) : default;
+                return hasValue ? Text(_value) : default;
 
             case "s":
                 if (!hasValue)
@@ -291,10 +298,10 @@ internal sealed class SpreadsheetWorksheetRows
                     throw new InvalidDataException($"Part '{_partName}' has a cell that names a shared string that does not exist.");
                 }
 
-                return SpreadsheetCellValue.FromText(_sharedStrings[index]);
+                return _sharedStrings[index].Length == 0 ? default : SpreadsheetCellValue.FromText(_sharedStrings[index]);
 
             case "str":
-                return hasValue ? SpreadsheetCellValue.FromText(_value.ToString()) : default;
+                return hasValue ? Text(_value) : default;
 
             case "b":
                 return hasValue ? SpreadsheetCellValue.FromBoolean(SpreadsheetXml.Flag(_value.ToString().Trim())) : default;
@@ -309,9 +316,9 @@ internal sealed class SpreadsheetWorksheetRows
                 }
 
                 string iso = _value.ToString().Trim();
-                return DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime parsed)
+                return DateTime.TryParseExact(iso, IsoDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime parsed)
                     ? SpreadsheetCellValue.FromDate(parsed)
-                    : SpreadsheetCellValue.FromText(iso);
+                    : Text(iso);
 
             default:
                 return Number(style, hasValue);
@@ -331,9 +338,11 @@ internal sealed class SpreadsheetWorksheetRows
             return default;
         }
 
-        if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal number))
+        if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal number)
+            || (number == 0m && HasNonZeroDigit(raw)))
         {
-            // NaN, an infinity, or a magnitude a decimal cannot hold. Handing back text keeps what the file said.
+            // NaN, an infinity, a magnitude a decimal cannot hold in either direction (1E-30 parses, as 0).
+            // Handing back text keeps what the file said.
             return SpreadsheetCellValue.FromText(raw);
         }
 
@@ -342,9 +351,38 @@ internal sealed class SpreadsheetWorksheetRows
             && _dateStyles[style]
             && SpreadsheetDateFormats.TryConvert(number, _date1904, out DateTime date))
         {
-            return SpreadsheetCellValue.FromDate(date);
+            return SpreadsheetCellValue.FromDate(date, number);
         }
 
         return SpreadsheetCellValue.FromNumber(number);
+    }
+
+    private static SpreadsheetCellValue Text(string text)
+    {
+        return text.Length == 0 ? default : SpreadsheetCellValue.FromText(text);
+    }
+
+    private static SpreadsheetCellValue Text(StringBuilder text)
+    {
+        return text.Length == 0 ? default : SpreadsheetCellValue.FromText(text.ToString());
+    }
+
+    // A number that parsed as zero has a digit other than zero in its mantissa only if it underflowed.
+    private static bool HasNonZeroDigit(string raw)
+    {
+        foreach (char character in raw)
+        {
+            if (character is 'e' or 'E')
+            {
+                return false;
+            }
+
+            if (character is >= '1' and <= '9')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

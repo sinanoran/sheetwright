@@ -49,11 +49,15 @@ public sealed class SpreadsheetReaderOptions
         init => _maxRows = Positive(value, nameof(MaxRows));
     }
 
-    /// <summary>The most columns in one row. Default 16,384.</summary>
+    /// <summary>The most columns in one row, at most 1,000,000. Default 16,384.</summary>
     public int MaxColumns
     {
         get => _maxColumns;
-        init => _maxColumns = Positive(value, nameof(MaxColumns));
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(value, 1_000_000, nameof(MaxColumns));
+            _maxColumns = Positive(value, nameof(MaxColumns));
+        }
     }
 
     /// <summary>
@@ -76,8 +80,8 @@ public sealed class SpreadsheetReaderOptions
 
     /// <summary>
     /// Workbooks: the most bytes all the parts of the package may decompress to. The sizes the zip declares are
-    /// added up when the package is opened, and no part can be read past the size it declares, so what is
-    /// decompressed never exceeds this however many times a sheet is read. Default 200 MB.
+    /// added up when the package is opened, and no part can be read past the size it declares, so one read of the
+    /// workbook never decompresses more than this. (A sheet read twice is decompressed twice.) Default 200 MB.
     /// </summary>
     public long MaxUncompressedBytes
     {
@@ -86,9 +90,11 @@ public sealed class SpreadsheetReaderOptions
     }
 
     /// <summary>
-    /// Workbooks: the most any one part may expand to, as a multiple of its compressed size (uncompressed ÷
-    /// compressed). Checked from the first mebibyte on, as the part is decompressed, so a bomb stops at the
-    /// ratio and not at the total size. Default 100; spreadsheet XML compresses 5 to 20 times.
+    /// Workbooks: the most any one XML part may expand to, as a multiple of its compressed size (uncompressed ÷
+    /// compressed). Checked from the first mebibyte on, against what the header declares when the package is opened
+    /// and against the bytes as they are decompressed, so a bomb stops at the ratio and not at the total size.
+    /// Parts that are not XML (pictures, printer settings) are never read and are not held to it. Default 100;
+    /// spreadsheet XML compresses 5 to 20 times.
     /// </summary>
     public int MaxCompressionRatio
     {
@@ -113,7 +119,11 @@ public sealed class SpreadsheetReaderOptions
         init => _maxSharedStringCharacters = Positive(value, nameof(MaxSharedStringCharacters));
     }
 
-    /// <summary>Workbooks: the most entries (parts) in the package. Default 1,000.</summary>
+    /// <summary>
+    /// Workbooks: the most entries (parts) in the package, and the most relationships one part may
+    /// have. Default 1,000. The zip's index is read before this is checked, so what bounds that work is the size
+    /// of the file the caller accepts.
+    /// </summary>
     public int MaxParts
     {
         get => _maxParts;
@@ -124,7 +134,8 @@ public sealed class SpreadsheetReaderOptions
     /// CSV: the encoding of the file. <see langword="null"/> (the default) means: the byte-order mark if there
     /// is one (UTF-8, UTF-16 little or big endian), otherwise UTF-8. A file with bytes that are not valid in
     /// the encoding is refused with an <see cref="InvalidDataException"/> rather than read with replacement
-    /// characters; the caller may then offer the person another encoding. A legacy code page needs
+    /// characters, whichever encoding is given (it is read strictly even if the object passed replaces bad bytes);
+    /// the caller may then offer the person another encoding. A legacy code page needs
     /// <see cref="CodePagesEncodingProvider"/> registered by the caller.
     /// </summary>
     public Encoding? Encoding { get; init; }

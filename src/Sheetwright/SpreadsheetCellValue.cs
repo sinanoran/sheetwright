@@ -37,7 +37,11 @@ public readonly struct SpreadsheetCellValue : IEquatable<SpreadsheetCellValue>
     /// <summary>The text, for <see cref="SpreadsheetCellKind.Text"/> and <see cref="SpreadsheetCellKind.Error"/>.</summary>
     public string? Text => _text;
 
-    /// <summary>The number, for <see cref="SpreadsheetCellKind.Number"/>.</summary>
+    /// <summary>
+    /// The number, for <see cref="SpreadsheetCellKind.Number"/>. For a <see cref="SpreadsheetCellKind.Date"/> it is
+    /// the serial number the file stores (days since the workbook's epoch), which is what to use for an elapsed
+    /// time such as <c>[h]:mm</c>, where 36 hours is the serial 1.5 and the date part means nothing.
+    /// </summary>
     public decimal Number => _number;
 
     /// <summary>The flag, for <see cref="SpreadsheetCellKind.Boolean"/>.</summary>
@@ -61,6 +65,9 @@ public readonly struct SpreadsheetCellValue : IEquatable<SpreadsheetCellValue>
 
     /// <summary>A date cell.</summary>
     public static SpreadsheetCellValue FromDate(DateTime date) => new(SpreadsheetCellKind.Date, null, 0m, date, false);
+
+    /// <summary>A date cell that also keeps the serial number the file stored it as.</summary>
+    public static SpreadsheetCellValue FromDate(DateTime date, decimal serial) => new(SpreadsheetCellKind.Date, null, serial, date, false);
 
     /// <summary>An error cell.</summary>
     public static SpreadsheetCellValue FromError(string error)

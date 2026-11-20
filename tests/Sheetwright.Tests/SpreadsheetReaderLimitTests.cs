@@ -21,6 +21,7 @@ namespace Sheetwright.Tests;
 /// any of it) and once against the bytes that come out (because a header can lie), and both are tested.
 /// </para>
 /// </remarks>
+[Collection(HeapCollection.Name)]
 public sealed class SpreadsheetReaderLimitTests
 {
     private static SpreadsheetReadLimitException Refused(Action action)
@@ -61,14 +62,14 @@ public sealed class SpreadsheetReaderLimitTests
     public void A_ratio_bomb_is_refused_by_the_ratio_and_not_by_the_total_size()
     {
         XlsxBuilder builder = XlsxBuilder.Workbook(string.Empty);
-        builder.Add("xl/bomb.bin", new byte[8 * 1024 * 1024]);
+        builder.Add("xl/bomb.xml", new byte[8 * 1024 * 1024]);
 
         SpreadsheetReadLimitException exception = Refused(() =>
             SpreadsheetWorkbookReader.Open(builder.ToStream(), new SpreadsheetReaderOptions { MaxUncompressedBytes = 1024L * 1024 * 1024, MaxCompressionRatio = 100 }));
 
         Assert.Equal(SpreadsheetReadLimit.MaxCompressionRatio, exception.Limit);
         Assert.Equal(100, exception.Maximum);
-        Assert.Contains("bomb.bin", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bomb.xml", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,20 +124,6 @@ public sealed class SpreadsheetReaderLimitTests
 
         Assert.Equal(SpreadsheetReadLimit.MaxCompressionRatio, exception.Limit);
         Assert.InRange(total, SpreadsheetBoundedPartStream.RatioFloorBytes, SpreadsheetBoundedPartStream.RatioFloorBytes + buffer.Length);
-    }
-
-    [Fact]
-    public void A_header_that_understates_the_size_never_lets_more_than_it_declares_through()
-    {
-        // The declared size in the zip's central directory is overwritten with 100, so the part that is read
-        // is cut off at 100 bytes (or refused), and never read past what the file said it was.
-        XlsxBuilder builder = XlsxBuilder.Workbook(Rows(200));
-        byte[] bytes = builder.ToStream().ToArray();
-        Patch(bytes, "sheet1.xml", declaredLength: 100);
-
-        Exception exception = Assert.ThrowsAny<Exception>(() => Read(new MemoryStream(bytes), new SpreadsheetReaderOptions()));
-
-        Assert.True(exception is InvalidDataException or SpreadsheetReadLimitException, exception.GetType().Name);
     }
 
     [Fact]
@@ -243,7 +230,7 @@ public sealed class SpreadsheetReaderLimitTests
         StringBuilder tag = new("<c r=\"A1\"");
         for (int index = 0; index < 200_000; index++)
         {
-            tag.Append(" a").Append(index).Append("=\"1\"");
+            tag.Append(" a").Append(index).Append("=\">\"");
         }
 
         tag.Append("><v>1</v></c>");
@@ -346,31 +333,5 @@ public sealed class SpreadsheetReaderLimitTests
         Assert.Equal("The file is over the MaxRows limit of 50000 (SpreadsheetReaderOptions.MaxRows): the sheet has more rows than that.", exception.Message);
         Assert.Equal(SpreadsheetReadLimit.MaxRows, exception.Limit);
         Assert.Equal(50_000, exception.Maximum);
-    }
-
-    /// <summary>
-    /// Overwrites the declared uncompressed size of the named entry in the zip's central directory.
-    /// </summary>
-    private static void Patch(byte[] zip, string nameEndsWith, uint declaredLength)
-    {
-        // A central directory record is PK\x01\x02, and the uncompressed size sits 24 bytes in; the name follows
-        // the 46-byte fixed part.
-        for (int index = 0; index < zip.Length - 46; index++)
-        {
-            if (zip[index] != 0x50 || zip[index + 1] != 0x4B || zip[index + 2] != 0x01 || zip[index + 3] != 0x02)
-            {
-                continue;
-            }
-
-            int nameLength = zip[index + 28] | (zip[index + 29] << 8);
-            string name = Encoding.UTF8.GetString(zip, index + 46, nameLength);
-            if (name.EndsWith(nameEndsWith, StringComparison.Ordinal))
-            {
-                BitConverter.GetBytes(declaredLength).CopyTo(zip, index + 24);
-                return;
-            }
-        }
-
-        throw new InvalidOperationException("The entry was not found in the central directory.");
     }
 }

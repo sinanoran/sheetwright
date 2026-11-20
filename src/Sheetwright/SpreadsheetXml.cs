@@ -61,7 +61,8 @@ internal static class SpreadsheetXml
         string partName,
         StringBuilder text,
         SpreadsheetReaderOptions options,
-        string where)
+        string where,
+        int row = 0)
     {
         if (reader.IsEmptyElement)
         {
@@ -88,7 +89,7 @@ internal static class SpreadsheetXml
                                 throw new SpreadsheetReadLimitException(
                                     SpreadsheetReadLimit.MaxCellCharacters,
                                     options.MaxCellCharacters,
-                                    $"{where} has more characters than that.");
+                                    $"{where}{(row > 0 ? " in row " + row.ToString(CultureInfo.InvariantCulture) : string.Empty)} has more characters than that.");
                             }
 
                             text.Append(chunk, 0, read);
@@ -117,7 +118,8 @@ internal static class SpreadsheetXml
         string partName,
         StringBuilder text,
         SpreadsheetReaderOptions options,
-        string where)
+        string where,
+        int row = 0)
     {
         if (reader.IsEmptyElement)
         {
@@ -150,7 +152,7 @@ internal static class SpreadsheetXml
                 }
                 else if (reader.LocalName == "t")
                 {
-                    ReadText(reader, partName, text, options, where);
+                    ReadText(reader, partName, text, options, where, row);
                 }
             }
             else if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth)

@@ -106,15 +106,17 @@ public sealed class SpreadsheetWorkbookReaderTests
             "xl/workbook.xml",
             $"<workbook xmlns=\"{XlsxBuilder.Main}\" xmlns:r=\"{XlsxBuilder.Rel}\"><sheets>"
             + "<sheet name=\"Shown\" sheetId=\"1\" r:id=\"rId1\"/>"
-            + "<sheet name=\"Secret\" sheetId=\"2\" state=\"veryHidden\" r:id=\"rId1\"/>"
+            + "<sheet name=\"Secret\" sheetId=\"2\" state=\"veryHidden\" r:id=\"rId2\"/>"
             + "<sheet name=\"Chart\" sheetId=\"3\" r:id=\"rId9\"/>"
             + "</sheets></workbook>");
         builder.Replace(
             "xl/_rels/workbook.xml.rels",
             $"<Relationships xmlns=\"{XlsxBuilder.PackageRel}\">"
             + $"<Relationship Id=\"rId1\" Type=\"{XlsxBuilder.Rel}/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+            + $"<Relationship Id=\"rId2\" Type=\"{XlsxBuilder.Rel}/worksheet\" Target=\"worksheets/sheet2.xml\"/>"
             + $"<Relationship Id=\"rId9\" Type=\"{XlsxBuilder.Rel}/chartsheet\" Target=\"chartsheets/sheet1.xml\"/>"
             + "</Relationships>");
+        builder.Add("xl/worksheets/sheet2.xml", XlsxBuilder.Sheet(XlsxBuilder.Row(1, XlsxBuilder.Inline("A1", "hidden"))));
 
         using SpreadsheetWorkbookReader reader = SpreadsheetWorkbookReader.Open(builder.ToStream());
 
