@@ -338,8 +338,56 @@ still bounds the work of reading the zip's index.
 
 A file that is not a zip, not a workbook, or not well-formed is an
 `InvalidDataException` and never contains a cell of the file in its message.
-The readers are synchronous and not thread-safe; dispose them to release the
-stream (or pass `leaveOpen: true`).
+The readers are synchronous; dispose them to release the stream (or pass
+`leaveOpen: true`). For threads, see the next section.
+
+## Threads
+
+**One instance belongs to one thread at a time.** `SpreadsheetPackage` (with its worksheets, ranges and
+styles), `SpreadsheetStreamWriter`, `SpreadsheetWorkbookReader` and `SpreadsheetCsvReader` are not
+thread-safe, and a lock would not make them useful: a reader is a cursor moving forward through a stream, so two
+threads that shared one would only split the rows between them in an order nobody chose. An instance may move
+from one thread to another *between* calls, which is what an `await` does; it must not be used by two at once.
+
+**Separate instances share nothing**, so using many of them at the same time is fine: the library keeps no static
+mutable state, no cache and no pool, and the tests run sixteen threads building, writing and reading back their
+own workbooks at once and check that every one gets exactly its own data. A parallel export of many reports is
+therefore one package or one writer per task.
+
+**To spread one file over several consumers**, read it on one thread and hand the rows on. A bounded channel does
+that and keeps memory flat, because the reader waits when the consumers are behind:
+
+```csharp
+Channel<SpreadsheetRow> rows = Channel.CreateBounded<SpreadsheetRow>(1_000);
+
+Task producer = Task.Run(async () =>
+{
+    using SpreadsheetWorkbookReader reader = SpreadsheetWorkbookReader.Open(upload);
+    foreach (SpreadsheetRow row in reader.ReadRows(0))
+    {
+        await rows.Writer.WriteAsync(row, cancellationToken);
+    }
+
+    rows.Writer.Complete();
+}, cancellationToken);
+
+Task[] consumers = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
+{
+    await foreach (SpreadsheetRow row in rows.Reader.ReadAllAsync(cancellationToken))
+    {
+        await ImportAsync(row, cancellationToken);   // row is a value: safe to use on any thread
+    }
+}, cancellationToken)).ToArray();
+
+await Task.WhenAll(consumers.Append(producer));
+```
+
+A `SpreadsheetRow` is a fresh object that nothing else holds, so it can be handed to another thread, which then owns it
+(its `Cells` property is filled in the first time it is asked for, so two threads should not share one row). Writing from several threads
+into one workbook works the same way in reverse: let the tasks produce rows, and have one task write them.
+
+If you ever need several threads to write *into the same package*, that is a feature request with a real use
+case behind it, not something to emulate with a lock around every cell: say what you are building.
 
 ## Conditional formatting
 

@@ -37,6 +37,10 @@ namespace Sheetwright;
 /// them, including the <c>dd/mm/yyyy</c> a <see cref="DateTime"/> gets when the caller gave no
 /// format of their own, so the same rows produce the same cells whichever writer wrote them.
 /// </para>
+/// <para>
+/// Not thread-safe: one instance is used by one thread at a time (it may move between threads between
+/// calls, as an <c>await</c> does). Separate instances share nothing and may be used concurrently.
+/// </para>
 /// </remarks>
 public sealed class SpreadsheetStreamWriter : IDisposable
 {

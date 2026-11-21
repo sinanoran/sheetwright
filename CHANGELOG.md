@@ -6,6 +6,13 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A README section on threads: one instance belongs to one thread at a time, separate instances share
+  nothing and may be used concurrently, and one file is spread over several consumers with a channel.
+  `SpreadsheetPackage` and `SpreadsheetStreamWriter` say so in their documentation (the readers did).
+  A test runs sixteen threads building, writing and reading back their own workbooks and CSV files at once.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added
