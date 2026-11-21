@@ -5,6 +5,11 @@ using System.Globalization;
 
 namespace Sheetwright;
 
+/// <summary>
+/// A workbook being written. Not thread-safe: one instance, and everything reached from it (the workbook, its
+/// worksheets, ranges and styles), is used by one thread at a time. It may move between threads between calls, as
+/// an <c>await</c> does. Separate instances share nothing, so any number may be built concurrently.
+/// </summary>
 public sealed class SpreadsheetPackage : IDisposable
 {
     private readonly MemoryStream _stream;
