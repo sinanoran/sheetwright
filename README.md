@@ -501,18 +501,21 @@ sheet.DataValidations.AddAnyValidation("B1:B9 E1:E9");
 - **Macro-enabled workbooks** — `new SpreadsheetPackage(macroEnabled: true)` and
   `SetVbaProject`, for a template that has to carry an existing VBA project.
 
-## What it deliberately does not do
+## Not supported yet
+
+These are not in the library today. Each one is added when a real use needs it,
+not because a spreadsheet library ought to have it.
 
 - **Calculate.** A formula is stored as text; Excel evaluates it on open. Reading
   a formula cell out of a package this library wrote gives you the formula, not a
-  value.
+  value. A formula engine is the next planned feature: it would let imports,
+  filled-in templates and exports carry the values Excel would show.
 - **Edit an existing workbook.** `new SpreadsheetPackage(stream)` opens
   read-only, and every write throws. Reading is there so a test — or an import —
   can look at what was produced (and `SpreadsheetTemplateHydrator` is provided for
   stamping values into pre-formatted template workbooks).
-- **Charts, pivot tables, comments.** None of them are here. Each is a fair
-  thing to add when something needs one, and none should be added on the
-  argument that a spreadsheet library ought to have it.
+- **Charts, pivot tables, comments.** None of them are here yet. They are on the
+  list for later, after Calculate.
 
 ## How it is built
 
